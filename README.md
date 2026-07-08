@@ -1,5 +1,11 @@
 # Model Identity Verifier
 
+[![CI](https://github.com/codethor0/model-identity-verifier/actions/workflows/ci.yml/badge.svg)](https://github.com/codethor0/model-identity-verifier/actions/workflows/ci.yml)
+[![Security](https://github.com/codethor0/model-identity-verifier/actions/workflows/security.yml/badge.svg)](https://github.com/codethor0/model-identity-verifier/actions/workflows/security.yml)
+[![Release](https://github.com/codethor0/model-identity-verifier/actions/workflows/release.yml/badge.svg)](https://github.com/codethor0/model-identity-verifier/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/github/license/codethor0/model-identity-verifier)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)](https://www.python.org/downloads/)
+
 A Python CLI tool that checks whether a large language model is consistently identifying itself, detects identity hallucination, detects suspicious route/provider mismatch, detects possible downgrade/substitution signals, and generates structured reports.
 
 **Model self-identification is generated text. It is not attestation.**
