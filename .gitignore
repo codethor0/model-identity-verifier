@@ -11,6 +11,7 @@ build/
 .miv/reports/
 .miv/baselines/
 .miv/prompts/
+.miv/manual-test/
 *.log
 *.tmp
 identity_report*.json
