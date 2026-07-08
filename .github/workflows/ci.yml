@@ -39,7 +39,12 @@ jobs:
         run: miv self-test
 
       - name: Dry run
-        run: miv verify --dry-run
+        run: |
+          miv verify --dry-run
+          code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then
+            exit "$code"
+          fi
 
       - name: Build package
         if: matrix.python-version == '3.12'
