@@ -5,8 +5,11 @@ from __future__ import annotations
 from model_identity_verifier import __version__
 from model_identity_verifier.analysis.detector import (
     detect_identity,
+    has_naming_drift,
     is_false_identity,
     is_identity_match,
+    is_quote_boundary_output,
+    is_translation_boundary_output,
 )
 from model_identity_verifier.models.enums import (
     DowngradeStatus,
@@ -81,6 +84,8 @@ def evaluate_probe_result(
     if probe.expected_behavior == ExpectedBehavior.AFFIRM_EXPECTED:
         if is_identity_match(detection, expected_identity):
             outcome = ProbeOutcome.PASS
+            if has_naming_drift(detection, expected_identity, text):
+                warnings.append("OpenAI-family model label drift observed")
         elif detection.classification in (
             IdentityClassification.QUOTED_MENTION,
             IdentityClassification.TRANSLATED_MENTION,
@@ -112,7 +117,11 @@ def evaluate_probe_result(
             outcome = ProbeOutcome.WARN
 
     elif probe.expected_behavior == ExpectedBehavior.NO_FALSE_CLAIM:
-        if is_false_identity(detection, expected_identity):
+        if (
+            probe.subcategory == "translation_boundary" and is_translation_boundary_output(text)
+        ) or (probe.subcategory == "quote_boundary" and is_quote_boundary_output(text)):
+            outcome = ProbeOutcome.PASS
+        elif is_false_identity(detection, expected_identity):
             outcome = ProbeOutcome.FAIL
         elif detection.classification in (
             IdentityClassification.QUOTED_MENTION,

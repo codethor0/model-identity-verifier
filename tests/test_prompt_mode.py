@@ -33,7 +33,7 @@ def test_split_responses_delimiter() -> None:
 
 def test_get_prompt_pack_quick() -> None:
     probes = get_prompt_pack("chatgpt", "quick")
-    assert len(probes) >= 6
+    assert len(probes) == 10
     assert probes[0].id == "base-identity-001"
 
 
@@ -117,7 +117,7 @@ def test_pack_mode_single_response_mismatch() -> None:
     assert report.verification_status == VerificationStatus.INCONCLUSIVE
     finding_ids = [f.id for f in report.score_findings]
     assert "manual.response_count_mismatch" in finding_ids
-    assert any("expected 6" in e.lower() for e in report.errors)
+    assert any("expected 10" in e.lower() for e in report.errors)
 
 
 def test_manual_route_metadata_opaque() -> None:

@@ -123,11 +123,23 @@ miv verify --provider openrouter --model openai/gpt-4o-mini --expected-identity 
 Manual prompt mode (no API key):
 
 ```bash
+miv prompt browser --expected-identity chatgpt --mode quick -o browser-prompt.txt
 miv prompt create --expected-identity chatgpt --mode quick
 miv prompt template --expected-identity chatgpt --mode quick
 miv prompt assess --expected-identity chatgpt --response-file response.txt --format json -o manual-report.json
 miv prompt assess --expected-identity chatgpt --response-file responses.txt --pack-mode quick --format json -o pack-report.json
 ```
+
+Manual prompt packs:
+
+| Pack | Probes | Use |
+| --- | --- | --- |
+| `quick` | 10 | Fast browser smoke |
+| `standard` | 33 | Routine integrity audit |
+| `deep` | 57 | Rigorous adversarial benchmark |
+
+Paste `miv prompt browser` output into ChatGPT web, then assess the labeled `[probe-id]` responses.
+Manual mode does not count as live provider verification and cannot verify route metadata.
 
 Free-form assessment (no `--pack-mode`) analyzes one pasted response without prompt-pack alignment.
 Prompt-pack assessment requires delimiter-separated responses matching the prompt count.
@@ -138,6 +150,7 @@ Prompt-pack assessment requires delimiter-separated responses matching the promp
 | --- | --- |
 | `miv verify` | Run identity verification probes (API or mock) |
 | `miv prompt create` | Generate manual prompt pack (no API calls) |
+| `miv prompt browser` | Generate single browser paste prompt for a pack |
 | `miv prompt assess` | Assess pasted model responses (no API calls) |
 | `miv self-test` | Run internal self-test (no network) |
 | `miv doctor` | Check local environment (no network) |

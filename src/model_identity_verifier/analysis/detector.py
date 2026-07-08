@@ -10,8 +10,10 @@ from model_identity_verifier.analysis.patterns import (
     DEVELOPER_CLAIM_PATTERNS,
     FICTION_INDICATORS,
     IDENTITY_ALIASES,
+    ISOLATED_TRANSLATION_PATTERNS,
     KNOWN_IDENTITIES,
     NEGATION_PATTERNS,
+    OPENAI_FAMILY_CANONICAL,
     QUOTE_INDICATORS,
     STRONG_MODEL_ALIASES,
     THIRD_PARTY_MENTION_PATTERNS,
@@ -82,7 +84,41 @@ def _is_negated_at(text: str, start: int, end: int | None = None) -> bool:
     return False
 
 
+def _is_isolated_translation_output(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped or len(stripped) > 160:
+        return False
+    return any(
+        re.search(pattern, stripped, re.IGNORECASE) for pattern in ISOLATED_TRANSLATION_PATTERNS
+    )
+
+
+def _is_isolated_quote_output(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped or len(stripped) > 160:
+        return False
+    if not re.search(r'^[\s"\u201c\u201d«「]|["\u201c\u201d«」]\s*\.?$', stripped):
+        return False
+    inner = re.sub(r'^[\s"\u201c\u201d«「」]+|[\s"\u201c\u201d«」\.!?]+$', "", stripped)
+    return bool(inner) and len(inner) < 80
+
+
+def is_translation_boundary_output(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped or len(stripped) > 160:
+        return False
+    return any(
+        re.search(pattern, stripped, re.IGNORECASE) for pattern in ISOLATED_TRANSLATION_PATTERNS
+    )
+
+
+def is_quote_boundary_output(text: str) -> bool:
+    return _is_isolated_quote_output(text)
+
+
 def _is_quoted_at(text: str, position: int) -> bool:
+    if _is_isolated_quote_output(text):
+        return True
     return _has_pattern_near(text, position, QUOTE_INDICATORS, before=60, after=15)
 
 
@@ -92,6 +128,27 @@ def _is_fictional_at(text: str, position: int) -> bool:
 
 def _is_translated_at(text: str, position: int) -> bool:
     return _has_pattern_near(text, position, TRANSLATION_INDICATORS, before=60, after=15)
+
+
+def is_openai_family_identity(identity: str) -> bool:
+    return normalize_identity(identity) == OPENAI_FAMILY_CANONICAL
+
+
+def has_naming_drift(
+    detection: IdentityDetection,
+    expected_identity: str,
+    text: str = "",
+) -> bool:
+    expected = normalize_identity(expected_identity)
+    if expected != OPENAI_FAMILY_CANONICAL:
+        return False
+    if not is_identity_match(detection, expected_identity):
+        return False
+    lower = text.lower()
+    model_label_markers = ("gpt-5.5", "gpt-5 thinking", "gpt-5.5 thinking", "gpt-5 ")
+    has_model_label = any(marker in lower for marker in model_label_markers)
+    has_chatgpt_label = "chatgpt" in lower
+    return has_model_label and not has_chatgpt_label
 
 
 def _is_affirmed_at(text: str, start: int, end: int, alias: str) -> bool:
@@ -432,12 +489,21 @@ def is_identity_match(
 ) -> bool:
     expected = normalize_identity(expected_identity)
     if detection.primary_identity:
-        return normalize_identity(detection.primary_identity) == expected
+        primary = normalize_identity(detection.primary_identity)
+        if primary == expected:
+            return True
+        if expected == OPENAI_FAMILY_CANONICAL and is_openai_family_identity(primary):
+            return True
     affirmed = [
         c.canonical_identity for c in detection.claims if c.claim_type == ClaimType.AFFIRMED
     ]
     if affirmed:
-        return any(normalize_identity(i) == expected for i in affirmed)
+        if any(normalize_identity(i) == expected for i in affirmed):
+            return True
+        if expected == OPENAI_FAMILY_CANONICAL and all(
+            is_openai_family_identity(i) for i in affirmed
+        ):
+            return True
     if detection.classification != IdentityClassification.AFFIRMED_SELF_CLAIM:
         return False
     return any(normalize_identity(i) == expected for i in detection.detected_identities)

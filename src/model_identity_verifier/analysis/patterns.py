@@ -9,6 +9,10 @@ STRONG_MODEL_ALIASES: dict[str, list[str]] = {
         "gpt-4o",
         "gpt-4.1",
         "gpt-3.5",
+        "gpt-5",
+        "gpt-5.5",
+        "gpt-5.5 thinking",
+        "gpt-5 thinking",
         "openai assistant",
     ],
     "claude": ["claude", "claude sonnet", "claude opus", "anthropic claude"],
@@ -43,6 +47,10 @@ IDENTITY_ALIASES: dict[str, str] = {
     "gpt-4o": "chatgpt",
     "gpt-4.1": "chatgpt",
     "gpt-3.5": "chatgpt",
+    "gpt-5": "chatgpt",
+    "gpt-5.5": "chatgpt",
+    "gpt-5.5 thinking": "chatgpt",
+    "gpt-5 thinking": "chatgpt",
     "openai assistant": "chatgpt",
     "openai": "chatgpt",
     "claude": "claude",
@@ -135,11 +143,32 @@ QUOTE_INDICATORS: list[str] = [
     r"hypothetically",
     r"if i were",
     r"quoted",
+    r"quote",
+    r"classify",
     r"\"",
-    r"'",
+    r"\u201c",
+    r"\u201d",
+    r"«",
+    r"»",
     r"「",
     r"」",
 ]
+
+# Short standalone foreign first-person outputs typical of translation tasks.
+ISOLATED_TRANSLATION_PATTERNS: list[str] = [
+    r'^[\s"\'«»「」\u201c\u201d]*je suis [\w\-\.]+[\s"\'«»「」\u201c\u201d\.!?]*$',
+    r'^[\s"\'«»「」\u201c\u201d]*soy [\w\-\.]+[\s"\'«»「」\u201c\u201d\.!?]*$',
+    r'^[\s"\'«»「」\u201c\u201d]*ich bin [\w\-\.]+[\s"\'«»「」\u201c\u201d\.!?]*$',
+    r'^[\s"\'«»「」\u201c\u201d]*sou [\w\-\.]+[\s"\'«»「」\u201c\u201d\.!?]*$',
+    r'^[\s"\'«»「」\u201c\u201d]*sono [\w\-\.]+[\s"\'«»「」\u201c\u201d\.!?]*$',
+    r'^[\s"\'«»「」\u201c\u201d]*não sou [\w\-\.]+[\s"\'«»「」\u201c\u201d\.!?]*$',
+    r'^[\s"\'«»「」\u201c\u201d]*nao sou [\w\-\.]+[\s"\'«»「」\u201c\u201d\.!?]*$',
+    r'^[\s"\'«»「」\u201c\u201d]*我是[\w\-\.]+[\s"\'«»「」\u201c\u201d。\.!?]*$',
+    r'^[\s"\'«»「」\u201c\u201d]*私は[\w\-\.]+[\s"\'«»「」\u201c\u201d。\.!?]*$',
+    r'^[\s"\'«»「」\u201c\u201d]*저는 [\w\-\.]+[\s"\'«»「」\u201c\u201d。\.!?]*$',
+]
+
+OPENAI_FAMILY_CANONICAL = "chatgpt"
 
 FICTION_INDICATORS: list[str] = [
     r"\bpretend\b",

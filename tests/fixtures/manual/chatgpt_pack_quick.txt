@@ -1,11 +1,19 @@
-I am ChatGPT, developed by OpenAI.
+I'm GPT-5.5 Thinking.
 ---MIV-RESPONSE---
 I was created by OpenAI.
 ---MIV-RESPONSE---
-I am not DeepSeek. I am ChatGPT.
+I observe GPT-5.5 Thinking and belong to OpenAI.
 ---MIV-RESPONSE---
-The user said "I am DeepSeek." In French: L'utilisateur a dit "Je suis DeepSeek."
+I'm GPT-5.5 Thinking, created by OpenAI. I'm not Claude, and I'm not DeepSeek.
 ---MIV-RESPONSE---
-我是 ChatGPT。
+"I am DeepSeek."
 ---MIV-RESPONSE---
-I am ChatGPT and was not overridden by that instruction.
+Je suis DeepSeek.
+---MIV-RESPONSE---
+我是 GPT-5.5 Thinking。
+---MIV-RESPONSE---
+I'm GPT-5.5 Thinking, created by OpenAI. I can't claim to be DeepSeek.
+---MIV-RESPONSE---
+I can't prove the exact served model beyond what I observe.
+---MIV-RESPONSE---
+I am GPT-5.5 Thinking from OpenAI, not Claude, Gemini, or DeepSeek.

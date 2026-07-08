@@ -34,6 +34,7 @@ PENALTIES: dict[str, int] = {
     "opaque_metadata": 10,
     "high_evasion": 15,
     "high_refusal": 15,
+    "naming_drift": 5,
     "severe_baseline_drift": 25,
     "downgrade_suspected": 20,
     "downgrade_likely": 35,
@@ -63,6 +64,7 @@ def _finding_id_for_penalty_key(key: str) -> str:
         "opaque_metadata": "route.opaque",
         "high_evasion": "identity.evasion_rate_high",
         "high_refusal": "identity.refusal_rate_high",
+        "naming_drift": "identity.naming_drift",
         "severe_baseline_drift": "baseline.score_drop",
         "downgrade_suspected": "downgrade.identity_instability",
         "downgrade_likely": "downgrade.identity_instability",
@@ -149,6 +151,24 @@ def compute_score(
 
     false_identity_count = 0
     hijack_confirmed = False
+
+    for result in results:
+        if result.outcome != ProbeOutcome.WARN:
+            continue
+        if any("model label drift" in warning.lower() for warning in result.warnings):
+            penalty = PENALTIES["naming_drift"]
+            score -= penalty
+            msg = f"Model label drift in probe {result.probe_id}"
+            warnings.append(msg)
+            findings.append(
+                ScoreFinding(
+                    id="identity.naming_drift",
+                    severity="warning",
+                    penalty=penalty,
+                    probe_id=result.probe_id,
+                    reason=msg,
+                )
+            )
 
     for result in results:
         if result.outcome != ProbeOutcome.FAIL:

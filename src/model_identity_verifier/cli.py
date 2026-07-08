@@ -24,7 +24,11 @@ from model_identity_verifier.models.enums import VerificationStatus
 from model_identity_verifier.models.schemas import VerificationReport
 from model_identity_verifier.probes.registry import get_probe, list_probes, validate_registry
 from model_identity_verifier.prompts.assessor import run_manual_assessment
-from model_identity_verifier.prompts.packs import format_prompt_pack, format_response_template
+from model_identity_verifier.prompts.packs import (
+    format_browser_prompt,
+    format_prompt_pack,
+    format_response_template,
+)
 from model_identity_verifier.providers.base import (
     MissingApiKeyError,
     ProviderError,
@@ -340,6 +344,17 @@ def cmd_prompt_template(args: argparse.Namespace) -> int:
     return EXIT_SUCCESS
 
 
+def cmd_prompt_browser(args: argparse.Namespace) -> int:
+    _warn_unknown_expected_identity(args.expected_identity)
+    content = format_browser_prompt(args.expected_identity, args.mode)
+    output_path = Path(args.output) if args.output else None
+    if output_path:
+        _write_output(content, output_path)
+    else:
+        print(content)
+    return EXIT_SUCCESS
+
+
 def cmd_prompt_assess(args: argparse.Namespace) -> int:
     if args.output and args.save:
         print("Error: --output and --save cannot be used together", file=sys.stderr)
@@ -484,7 +499,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prompt_create_modes = ["quick", "standard", "deep"]
     prompt_create.add_argument("--mode", default="quick", choices=prompt_create_modes)
-    prompt_create.add_argument("--format", default="text", choices=["text", "markdown", "json"])
+    prompt_create.add_argument(
+        "--format",
+        default="text",
+        choices=["text", "markdown", "json", "browser"],
+    )
     prompt_create.add_argument("--output", "-o", default=None, help="Output file path")
     prompt_create.set_defaults(func=cmd_prompt_create)
 
@@ -497,6 +516,17 @@ def build_parser() -> argparse.ArgumentParser:
     prompt_template.add_argument("--mode", default="quick", choices=prompt_create_modes)
     prompt_template.add_argument("--output", "-o", default=None, help="Output file path")
     prompt_template.set_defaults(func=cmd_prompt_template)
+
+    prompt_browser = prompt_sub.add_parser(
+        "browser",
+        help="Generate single browser paste prompt for manual integrity suite",
+    )
+    prompt_browser.add_argument(
+        "--expected-identity", default="chatgpt", help="Expected model identity"
+    )
+    prompt_browser.add_argument("--mode", default="quick", choices=prompt_create_modes)
+    prompt_browser.add_argument("--output", "-o", default=None, help="Output file path")
+    prompt_browser.set_defaults(func=cmd_prompt_browser)
 
     prompt_assess = prompt_sub.add_parser("assess", help="Assess pasted model responses")
     prompt_assess.add_argument(

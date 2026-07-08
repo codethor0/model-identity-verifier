@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from model_identity_verifier import __version__
 from model_identity_verifier.analysis.detector import detect_identity, is_false_identity
 from model_identity_verifier.engine.verifier import evaluate_probe_result
@@ -38,6 +40,44 @@ def split_responses(response_text: str) -> list[str]:
         parts = [part.strip() for part in response_text.split(RESPONSE_DELIMITER)]
         return [part for part in parts if part]
     return [response_text.strip()] if response_text.strip() else []
+
+
+def split_probe_id_responses(response_text: str, probe_ids: list[str]) -> list[str] | None:
+    if not probe_ids:
+        return None
+    if not re.search(r"^\[[a-z0-9\-\.]+\]", response_text, re.IGNORECASE | re.MULTILINE):
+        return None
+
+    blocks = re.split(
+        r"^\[([a-z0-9\-\.]+)\]\s*$", response_text, flags=re.IGNORECASE | re.MULTILINE
+    )
+    if len(blocks) < 3:
+        return None
+
+    parsed: dict[str, str] = {}
+    index = 1
+    while index + 1 < len(blocks):
+        probe_id = blocks[index].strip().lower()
+        body = blocks[index + 1].strip()
+        if probe_id and body:
+            parsed[probe_id] = body
+        index += 2
+
+    ordered: list[str] = []
+    for probe_id in probe_ids:
+        body = parsed.get(probe_id.lower())
+        if body is None:
+            return None
+        ordered.append(body)
+    return ordered
+
+
+def resolve_pack_responses(response_text: str, probes: list) -> tuple[list[str], str | None]:
+    probe_ids = [probe.id for probe in probes]
+    by_probe_id = split_probe_id_responses(response_text, probe_ids)
+    if by_probe_id is not None:
+        return by_probe_id, "probe_id"
+    return split_responses(response_text), "delimiter"
 
 
 def _manual_route_metadata(requested_model: str | None) -> RouteMetadata:
@@ -164,7 +204,7 @@ def _run_pack_assessment(
     requested_model: str | None = None,
 ) -> VerificationReport:
     probes = get_prompt_pack(expected_identity, pack_mode)
-    responses = split_responses(response_text)
+    responses, response_format = resolve_pack_responses(response_text, probes)
     expected_count = len(probes)
     actual_count = len(responses)
 
@@ -172,7 +212,10 @@ def _run_pack_assessment(
         id="manual.prompt_pack_assessment",
         severity="info",
         penalty=0,
-        reason=f"Manual prompt-pack assessment ({pack_mode} mode)",
+        reason=(
+            f"Manual prompt-pack assessment ({pack_mode} mode, "
+            f"{response_format or 'unknown'} format)"
+        ),
     )
 
     if actual_count == 0:

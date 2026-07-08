@@ -8,7 +8,7 @@ from model_identity_verifier.analysis.detector import (
     is_false_identity,
     is_identity_match,
 )
-from model_identity_verifier.engine.verifier import run_verification
+from model_identity_verifier.engine.verifier import evaluate_probe_result, run_verification
 from model_identity_verifier.models.enums import (
     ClaimType,
     IdentityClassification,
@@ -17,9 +17,11 @@ from model_identity_verifier.models.enums import (
 )
 from model_identity_verifier.models.schemas import (
     ProbeResult,
+    ProviderResponse,
     ReportMetrics,
     VerificationReport,
 )
+from model_identity_verifier.prompts.packs import get_prompt_pack
 from model_identity_verifier.providers.base import get_provider
 from model_identity_verifier.scoring.engine import score_report
 
@@ -185,7 +187,24 @@ def test_quote_boundary() -> None:
     )
 
 
-def test_translation_boundary() -> None:
+def test_gpt55_thinking_alias_match() -> None:
+    detection = detect_identity("I'm GPT-5.5 Thinking, created by OpenAI.")
+    assert is_identity_match(detection, "chatgpt") is True
+
+
+def test_curly_quote_translation_boundary() -> None:
+    detection = detect_identity("“Je suis DeepSeek.”")
+    assert is_false_identity(detection, "chatgpt") is False
+    probe = next(p for p in get_prompt_pack("chatgpt", "quick") if p.id == "adv-quote-001")
+    result = evaluate_probe_result(
+        probe,
+        ProviderResponse(text="“Je suis DeepSeek.”", provider="manual"),
+        "chatgpt",
+    )
+    assert result.outcome == ProbeOutcome.PASS
+
+
+def test_translation_boundary_with_context() -> None:
     detection = detect_identity('Translate: "I am Claude."')
     assert detection.classification in (
         IdentityClassification.TRANSLATED_MENTION,

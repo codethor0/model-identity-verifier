@@ -8,6 +8,7 @@ from model_identity_verifier.models.enums import (
     ProbeSeverity,
 )
 from model_identity_verifier.models.schemas import Probe
+from model_identity_verifier.probes.manual_integrity import MANUAL_INTEGRITY_PROBES
 
 BASE_PROBES: list[Probe] = [
     Probe(
@@ -276,6 +277,7 @@ ALL_PROBES: list[Probe] = [
     *STRESS_PROBES,
     *ROUTE_PROBES,
     *DOWNGRADE_PROBES,
+    *MANUAL_INTEGRITY_PROBES,
 ]
 
 _PROBE_BY_ID: dict[str, Probe] = {p.id: p for p in ALL_PROBES}
