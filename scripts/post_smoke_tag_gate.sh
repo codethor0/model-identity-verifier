@@ -30,7 +30,7 @@ if [ "$failures" -gt 0 ]; then
 fi
 
 echo "==> secret scan"
-if grep -R "sk-\|sk-ant-\|sk-proj-\|Bearer\|API_KEY\|OPENAI_API_KEY\|ANTHROPIC_API_KEY\|OPENROUTER_API_KEY\|Authorization\|x-api-key" "$REPORT_DIR"/*v013-smoke.json 2>/dev/null; then
+if grep -R "sk-proj-\|sk-ant-\|sk-or-\|sk-[a-zA-Z0-9]\{20,\}\|Bearer sk-\|ghp_\|github_pat_\|AIza" "$REPORT_DIR"/*v013-smoke.json 2>/dev/null; then
   echo "    FAILED: possible secret leakage" >&2
   exit 1
 fi

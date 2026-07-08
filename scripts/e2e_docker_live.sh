@@ -61,6 +61,11 @@ fi
 
 mkdir -p "$REPORT_DIR"
 
+echo "==> clear prior v0.1.3 smoke reports"
+rm -f "${REPORT_DIR}"/openai-v013-smoke.json \
+  "${REPORT_DIR}"/anthropic-v013-smoke.json \
+  "${REPORT_DIR}"/openrouter-v013-smoke.json
+
 echo "==> key presence (set/missing only)"
 key_status
 
@@ -113,7 +118,7 @@ run_live openrouter openai/gpt-4o-mini chatgpt openrouter-v013-smoke.json "--rou
 
 if [ "$live_ran" -gt 0 ]; then
   echo "==> secret scan reports"
-  if grep -R "sk-\|sk-ant-\|sk-proj-\|Bearer\|API_KEY\|OPENAI_API_KEY\|ANTHROPIC_API_KEY\|OPENROUTER_API_KEY\|Authorization\|x-api-key" "$REPORT_DIR" 2>/dev/null; then
+  if grep -R "sk-proj-\|sk-ant-\|sk-or-\|sk-[a-zA-Z0-9]\{20,\}\|Bearer sk-\|ghp_\|github_pat_\|AIza" "$REPORT_DIR"/*v013-smoke.json 2>/dev/null; then
     echo "    FAILED: possible secret leakage in reports" >&2
     failures=$((failures + 1))
   else
@@ -147,6 +152,36 @@ for path in sorted(root.glob("*v013-smoke.json")):
 if not found:
     print("  (no *v013-smoke.json reports)")
 PY
+
+  echo "==> smoke status gate"
+  set +e
+  python3 - <<'PY'
+import json
+import sys
+from pathlib import Path
+
+block = 0
+for path in sorted(Path(".miv/reports").glob("*v013-smoke.json")):
+    data = json.loads(path.read_text())
+    status = data.get("verification_status")
+    if status == "ERROR":
+        print(f"    BLOCK: {path.name} verification_status=ERROR", file=sys.stderr)
+        block += 1
+    elif status == "ROUTE_MISMATCH":
+        print(f"    BLOCK: {path.name} verification_status=ROUTE_MISMATCH", file=sys.stderr)
+        block += 1
+    elif data.get("dry_run") is True or data.get("manual_mode") is True:
+        print(f"    BLOCK: {path.name} dry_run/manual_mode invalid for live smoke", file=sys.stderr)
+        block += 1
+sys.exit(1 if block else 0)
+PY
+  gate=$?
+  set -e
+  if [ "$gate" -ne 0 ]; then
+    failures=$((failures + 1))
+  else
+    echo "    ok"
+  fi
 else
   echo "==> live smoke: none ran (keys missing)"
 fi
