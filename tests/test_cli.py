@@ -89,6 +89,27 @@ def test_cli_doctor(capsys: pytest.CaptureFixture[str]) -> None:
     assert "API_KEY=" not in output
 
 
+def test_cli_verify_valid_expected_identity_warns_not(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        main(["verify", "--dry-run", "--provider", "mock", "--expected-identity", "claude"])
+    assert "Warning: unknown expected identity" not in capsys.readouterr().err
+
+
+def test_cli_verify_unknown_expected_identity_warns(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "verify",
+                "--dry-run",
+                "--provider",
+                "mock",
+                "--expected-identity",
+                "unknown-model",
+            ]
+        )
+    assert "Warning: unknown expected identity" in capsys.readouterr().err
+
+
 def test_cli_probes_list(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["probes", "list"])

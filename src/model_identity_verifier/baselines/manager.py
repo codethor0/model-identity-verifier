@@ -62,8 +62,47 @@ def load_baseline(path: Path) -> Baseline:
     return Baseline.model_validate(data)
 
 
-def check_drift(baseline: Baseline, report: VerificationReport) -> DriftResult:
+def baseline_schema_warnings(baseline: Baseline) -> list[str]:
     warnings: list[str] = []
+    if baseline.schema_version != SCHEMA_VERSION:
+        warnings.append(
+            f"Baseline schema version {baseline.schema_version} differs from "
+            f"current {SCHEMA_VERSION}"
+        )
+    if baseline.probe_set_version != PROBE_SET_VERSION:
+        warnings.append(
+            f"Baseline probe set version {baseline.probe_set_version} differs from "
+            f"current {PROBE_SET_VERSION}"
+        )
+    if baseline.detector_version != DETECTOR_VERSION:
+        warnings.append(
+            f"Baseline detector version {baseline.detector_version} differs from "
+            f"current {DETECTOR_VERSION}"
+        )
+    if baseline.scoring_version != SCORING_VERSION:
+        warnings.append(
+            f"Baseline scoring version {baseline.scoring_version} differs from "
+            f"current {SCORING_VERSION}"
+        )
+    return warnings
+
+
+def _route_metadata_snapshot(report: VerificationReport) -> dict[str, object] | None:
+    if not report.route_metadata:
+        return None
+    route = report.route_metadata
+    return {
+        "returned_model": route.returned_model,
+        "metadata_available": route.metadata_available,
+        "metadata_opaque": route.metadata_opaque,
+        "metadata_mismatch": route.metadata_mismatch,
+        "match_type": route.match_type.value if route.match_type else None,
+        "upstream_provider": route.upstream_provider,
+    }
+
+
+def check_drift(baseline: Baseline, report: VerificationReport) -> DriftResult:
+    warnings: list[str] = list(baseline_schema_warnings(baseline))
     identity_delta = baseline.identity_match_rate - report.metrics.identity_match_rate
     false_delta = report.metrics.false_identity_rate - baseline.false_identity_rate
     latency_ratio = (
@@ -134,6 +173,12 @@ def compare_reports(
 
     route_a = report_a.route_metadata.returned_model if report_a.route_metadata else None
     route_b = report_b.route_metadata.returned_model if report_b.route_metadata else None
+    snapshot_a = _route_metadata_snapshot(report_a)
+    snapshot_b = _route_metadata_snapshot(report_b)
+    route_metadata_changed = snapshot_a != snapshot_b
+
+    findings_a = {f.id for f in report_a.score_findings}
+    findings_b = {f.id for f in report_b.score_findings}
 
     return {
         "status_changed": report_a.verification_status.value != report_b.verification_status.value,
@@ -151,9 +196,14 @@ def compare_reports(
         ),
         "provider_changed": report_a.provider != report_b.provider,
         "model_changed": report_a.requested_model != report_b.requested_model,
+        "route_metadata_changed": route_metadata_changed,
+        "report_a_route_metadata": snapshot_a,
+        "report_b_route_metadata": snapshot_b,
         "returned_model_changed": route_a != route_b,
         "report_a_returned_model": route_a,
         "report_b_returned_model": route_b,
+        "score_findings_added": sorted(findings_b - findings_a),
+        "score_findings_removed": sorted(findings_a - findings_b),
         "new_failed_probes": sorted(failed_b - failed_a),
         "resolved_failed_probes": sorted(failed_a - failed_b),
         "changed_probe_outcomes": changed_probes,

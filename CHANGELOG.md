@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2] - 2026-07-08
+
+### Added
+
+- `route.opaque` score finding when route metadata is opaque
+- Report compare diffs for route metadata and score findings
+- Expected-identity CLI warning for unknown aliases
+- Baseline schema version compatibility warnings
+- Provider error path redaction for response bodies and URLs
+- `docs/release-checklist.md`
+
+### Changed
+
+- Provider HTTP errors use `_safe_error_message` redaction helper
+
 ## [0.1.1] - 2026-07-08
 
 ### Fixed

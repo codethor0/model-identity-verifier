@@ -6,6 +6,7 @@ from model_identity_verifier.models.enums import (
     ProbeCategory,
     ProbeOutcome,
     RiskLevel,
+    RouteMatchType,
     VerificationStatus,
 )
 from model_identity_verifier.models.schemas import (
@@ -151,6 +152,39 @@ def test_route_metadata_mismatch_finding() -> None:
     )
     scored = score_report(report)
     assert any(f.id == "route.metadata_mismatch" for f in scored.score_findings)
+
+
+def test_route_metadata_opaque_finding() -> None:
+    report = VerificationReport(
+        tool_version="0.1.2",
+        session_id="s",
+        timestamp="t",
+        provider="mock",
+        requested_model="gpt-4o",
+        expected_identity="chatgpt",
+        verification_status=VerificationStatus.PASS,
+        confidence_score=100,
+        risk_level=RiskLevel.LOW,
+        route_metadata=RouteMetadata(
+            metadata_available=True,
+            metadata_opaque=True,
+            match_type=RouteMatchType.METADATA_OPAQUE,
+            returned_model="gpt-4o",
+        ),
+        metrics=ReportMetrics(total_probes=1, passed_probes=1),
+        probe_results=[
+            ProbeResult(
+                probe_id="t1",
+                probe_category=ProbeCategory.BASE,
+                outcome=ProbeOutcome.PASS,
+            )
+        ],
+    )
+    scored = score_report(report)
+    opaque = [f for f in scored.score_findings if f.id == "route.opaque"]
+    assert len(opaque) == 1
+    assert opaque[0].severity == "warning"
+    assert opaque[0].penalty == 10
 
 
 def test_high_refusal_rate_finding() -> None:

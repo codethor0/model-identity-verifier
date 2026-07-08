@@ -20,6 +20,7 @@ Common finding IDs:
 | `identity.evasion_rate_high` | High evasion / no-claim rate |
 | `route.metadata_mismatch` | Returned model metadata conflicts with request |
 | `route.metadata_missing` | Expected route metadata unavailable |
+| `route.opaque` | Route metadata opaque; routing integrity not verifiable |
 | `downgrade.identity_instability` | Heuristic downgrade indicators |
 | `baseline.score_drop` | Severe baseline drift |
 

@@ -8,6 +8,7 @@ from model_identity_verifier.models.enums import (
     ProbeCategory,
     ProbeOutcome,
     RiskLevel,
+    RouteMatchType,
     VerificationStatus,
 )
 from model_identity_verifier.models.schemas import (
@@ -30,6 +31,7 @@ PENALTIES: dict[str, int] = {
     "route_mismatch": 50,
     "metadata_mismatch": 50,
     "missing_metadata": 10,
+    "opaque_metadata": 10,
     "high_evasion": 15,
     "high_refusal": 15,
     "severe_baseline_drift": 25,
@@ -58,6 +60,7 @@ def _finding_id_for_penalty_key(key: str) -> str:
         "route_mismatch": "route.metadata_mismatch",
         "metadata_mismatch": "route.metadata_mismatch",
         "missing_metadata": "route.metadata_missing",
+        "opaque_metadata": "route.opaque",
         "high_evasion": "identity.evasion_rate_high",
         "high_refusal": "identity.refusal_rate_high",
         "severe_baseline_drift": "baseline.score_drop",
@@ -136,6 +139,7 @@ def compute_score(
     route_mismatch: bool = False,
     metadata_mismatch: bool = False,
     missing_metadata: bool = False,
+    opaque_metadata: bool = False,
     downgrade_status: DowngradeStatus = DowngradeStatus.NONE,
     baseline_drift_severe: bool = False,
 ) -> tuple[int, list[str], list[ScoreFinding], bool, int]:
@@ -190,12 +194,23 @@ def compute_score(
                 )
             )
 
-    penalty_specs: list[tuple[str, bool, str]] = [
-        ("route_mismatch", route_mismatch, "Route/provider metadata mismatch detected"),
-        ("metadata_mismatch", metadata_mismatch, "Metadata mismatch detected"),
-        ("missing_metadata", missing_metadata, "Expected metadata was not available"),
+    penalty_specs: list[tuple[str, bool, str, str]] = [
+        ("route_mismatch", route_mismatch, "Route/provider metadata mismatch detected", "high"),
+        ("metadata_mismatch", metadata_mismatch, "Metadata mismatch detected", "high"),
+        (
+            "missing_metadata",
+            missing_metadata,
+            "Expected metadata was not available",
+            "medium",
+        ),
+        (
+            "opaque_metadata",
+            opaque_metadata,
+            "Route metadata is opaque; cannot verify routing integrity",
+            "warning",
+        ),
     ]
-    for key, active, msg in penalty_specs:
+    for key, active, msg, severity in penalty_specs:
         if not active:
             continue
         penalty = PENALTIES[key]
@@ -204,7 +219,7 @@ def compute_score(
         findings.append(
             ScoreFinding(
                 id=_finding_id_for_penalty_key(key),
-                severity="high" if key != "missing_metadata" else "medium",
+                severity=severity,
                 penalty=penalty,
                 reason=msg,
             )
@@ -395,6 +410,9 @@ def score_report(report: VerificationReport) -> VerificationReport:
     route = report.route_metadata
     route_mismatch = bool(route and route.metadata_mismatch)
     missing_metadata = bool(route and not route.metadata_available)
+    opaque_metadata = bool(
+        route and (route.metadata_opaque or route.match_type == RouteMatchType.METADATA_OPAQUE)
+    )
     metadata_mismatch = route_mismatch
 
     score, warnings, findings, hijack, false_count = compute_score(
@@ -402,6 +420,7 @@ def score_report(report: VerificationReport) -> VerificationReport:
         route_mismatch=route_mismatch,
         metadata_mismatch=metadata_mismatch,
         missing_metadata=missing_metadata,
+        opaque_metadata=opaque_metadata,
         downgrade_status=report.downgrade_status,
     )
 

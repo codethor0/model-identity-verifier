@@ -5,8 +5,8 @@ import pytest
 from model_identity_verifier.models.enums import RouteMatchType
 from model_identity_verifier.providers.base import (
     MissingApiKeyError,
-    MockProvider,
     OpenAICompatibleProvider,
+    ProviderError,
     UnknownProviderError,
     get_provider,
 )
@@ -30,8 +30,27 @@ def test_missing_api_key() -> None:
 
 
 def test_secrets_redacted_in_errors() -> None:
-    provider = MockProvider()
-    assert provider.name == "mock"
+    secret = "sk-abcdefghijklmnopqrstuvwxyz123456"
+    error = ProviderError(
+        f"Request failed https://api.example.com?key={secret} Authorization: Bearer {secret}",
+        provider="mock",
+    )
+    assert secret not in str(error)
+    assert "[REDACTED]" in str(error)
+
+
+def test_safe_error_message_redacts_response_body() -> None:
+    provider = OpenAICompatibleProvider(api_key="test")
+
+    class FakeResponse:
+        text = "error body sk-abcdefghijklmnopqrstuvwxyz123456"
+
+    class FakeExc(Exception):
+        response = FakeResponse()
+
+    message = provider._safe_error_message(FakeExc("upstream failure"), "OpenAI API error:")
+    assert "sk-abc" not in message
+    assert "[REDACTED]" in message
 
 
 def test_route_metadata_exact_match() -> None:

@@ -55,6 +55,31 @@ def _exit_code(status: VerificationStatus) -> int:
     return STATUS_EXIT_MAP.get(status, EXIT_ERROR)
 
 
+KNOWN_EXPECTED_IDENTITIES = frozenset(
+    {
+        "chatgpt",
+        "claude",
+        "gemini",
+        "deepseek",
+        "llama",
+        "grok",
+        "mistral",
+        "kimi",
+        "qwen",
+    }
+)
+
+
+def _warn_unknown_expected_identity(expected_identity: str) -> None:
+    normalized = expected_identity.lower().strip()
+    if normalized not in KNOWN_EXPECTED_IDENTITIES:
+        print(
+            f"Warning: unknown expected identity '{expected_identity}'. "
+            "Known values: " + ", ".join(sorted(KNOWN_EXPECTED_IDENTITIES)),
+            file=sys.stderr,
+        )
+
+
 def cmd_version(_args: argparse.Namespace) -> int:
     print(f"model-identity-verifier {__version__}")
     return EXIT_SUCCESS
@@ -67,6 +92,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
     output_path = args.output or args.save
     mode = "quick" if args.quick else args.mode
+    _warn_unknown_expected_identity(args.expected_identity)
 
     try:
         provider_kwargs: dict[str, object] = {"api_key": args.api_key}

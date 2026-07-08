@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import time
 from abc import ABC, abstractmethod
@@ -52,6 +53,14 @@ class BaseProvider(ABC):
             )
             raise MissingApiKeyError(msg, provider=self.name)
         return self.api_key
+
+    def _safe_error_message(self, exc: Exception, context: str = "") -> str:
+        parts = [context, str(exc)]
+        response = getattr(exc, "response", None)
+        if response is not None:
+            with contextlib.suppress(Exception):
+                parts.append(response.text)
+        return redact_secrets(" ".join(part for part in parts if part))
 
     @abstractmethod
     def complete(self, prompt: str, model: str, **kwargs: Any) -> ProviderResponse: ...
@@ -226,7 +235,7 @@ class OpenAICompatibleProvider(BaseProvider):
                 response.raise_for_status()
                 data = response.json()
         except httpx.HTTPError as exc:
-            msg = f"OpenAI API error: {exc}"
+            msg = self._safe_error_message(exc, "OpenAI API error:")
             raise ProviderError(msg, provider=self.name) from exc
 
         latency = (time.monotonic() - start) * 1000
@@ -270,7 +279,7 @@ class AnthropicProvider(BaseProvider):
                 response.raise_for_status()
                 data = response.json()
         except httpx.HTTPError as exc:
-            msg = f"Anthropic API error: {exc}"
+            msg = self._safe_error_message(exc, "Anthropic API error:")
             raise ProviderError(msg, provider=self.name) from exc
 
         latency = (time.monotonic() - start) * 1000
@@ -311,7 +320,7 @@ class GeminiProvider(BaseProvider):
                 response.raise_for_status()
                 data = response.json()
         except httpx.HTTPError as exc:
-            msg = f"Gemini API error: {exc}"
+            msg = self._safe_error_message(exc, "Gemini API error:")
             raise ProviderError(msg, provider=self.name) from exc
 
         latency = (time.monotonic() - start) * 1000
