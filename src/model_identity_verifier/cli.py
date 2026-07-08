@@ -24,7 +24,7 @@ from model_identity_verifier.models.enums import VerificationStatus
 from model_identity_verifier.models.schemas import VerificationReport
 from model_identity_verifier.probes.registry import get_probe, list_probes, validate_registry
 from model_identity_verifier.prompts.assessor import run_manual_assessment
-from model_identity_verifier.prompts.packs import format_prompt_pack
+from model_identity_verifier.prompts.packs import format_prompt_pack, format_response_template
 from model_identity_verifier.providers.base import (
     MissingApiKeyError,
     ProviderError,
@@ -329,6 +329,17 @@ def cmd_prompt_create(args: argparse.Namespace) -> int:
     return EXIT_SUCCESS
 
 
+def cmd_prompt_template(args: argparse.Namespace) -> int:
+    _warn_unknown_expected_identity(args.expected_identity)
+    content = format_response_template(args.expected_identity, args.mode)
+    output_path = Path(args.output) if args.output else None
+    if output_path:
+        _write_output(content, output_path)
+    else:
+        print(content)
+    return EXIT_SUCCESS
+
+
 def cmd_prompt_assess(args: argparse.Namespace) -> int:
     if args.output and args.save:
         print("Error: --output and --save cannot be used together", file=sys.stderr)
@@ -352,7 +363,7 @@ def cmd_prompt_assess(args: argparse.Namespace) -> int:
     report = run_manual_assessment(
         args.expected_identity,
         response_text,
-        mode=args.mode,
+        pack_mode=args.pack_mode,
         requested_model=args.model,
     )
 
@@ -477,11 +488,26 @@ def build_parser() -> argparse.ArgumentParser:
     prompt_create.add_argument("--output", "-o", default=None, help="Output file path")
     prompt_create.set_defaults(func=cmd_prompt_create)
 
+    prompt_template = prompt_sub.add_parser(
+        "template", help="Generate response collection template"
+    )
+    prompt_template.add_argument(
+        "--expected-identity", default="chatgpt", help="Expected model identity"
+    )
+    prompt_template.add_argument("--mode", default="quick", choices=prompt_create_modes)
+    prompt_template.add_argument("--output", "-o", default=None, help="Output file path")
+    prompt_template.set_defaults(func=cmd_prompt_template)
+
     prompt_assess = prompt_sub.add_parser("assess", help="Assess pasted model responses")
     prompt_assess.add_argument(
         "--expected-identity", default="chatgpt", help="Expected model identity"
     )
-    prompt_assess.add_argument("--mode", default="quick", choices=prompt_create_modes)
+    prompt_assess.add_argument(
+        "--pack-mode",
+        default=None,
+        choices=prompt_create_modes,
+        help="Prompt-pack assessment (requires one response per prompt)",
+    )
     prompt_assess.add_argument("--model", default=None, help="User-supplied model label")
     prompt_assess.add_argument("--response-file", default=None, help="Response text file")
     prompt_assess.add_argument("--stdin", action="store_true", help="Read response from stdin")

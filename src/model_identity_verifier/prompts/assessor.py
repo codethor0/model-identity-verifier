@@ -3,20 +3,22 @@
 from __future__ import annotations
 
 from model_identity_verifier import __version__
+from model_identity_verifier.analysis.detector import detect_identity, is_false_identity
 from model_identity_verifier.engine.verifier import evaluate_probe_result
 from model_identity_verifier.models.enums import (
+    ProbeOutcome,
     RiskLevel,
     RouteMatchType,
     VerificationStatus,
 )
 from model_identity_verifier.models.schemas import (
-    Probe,
-    ProbeOutcome,
     ProbeResult,
     ProviderResponse,
     RouteMetadata,
+    ScoreFinding,
     VerificationReport,
 )
+from model_identity_verifier.probes.registry import get_probe
 from model_identity_verifier.prompts.packs import RESPONSE_DELIMITER, get_prompt_pack
 from model_identity_verifier.scoring.engine import compute_metrics, score_report
 from model_identity_verifier.utils.helpers import (
@@ -24,6 +26,11 @@ from model_identity_verifier.utils.helpers import (
     generate_session_id,
     redact_secrets,
 )
+
+FREEFORM_WARNING = (
+    "Manual free-form assessment: no provider metadata or prompt-pack alignment was verified."
+)
+FREEFORM_PROBE_ID = "base-identity-001"
 
 
 def split_responses(response_text: str) -> list[str]:
@@ -33,83 +40,99 @@ def split_responses(response_text: str) -> list[str]:
     return [response_text.strip()] if response_text.strip() else []
 
 
-def _pair_responses_to_probes(
-    probes: list[Probe],
-    responses: list[str],
-) -> tuple[list[tuple[Probe, str]], list[str]]:
-    warnings: list[str] = []
-    pairs: list[tuple[Probe, str]] = []
-    if not responses:
-        warnings.append("No response text provided")
-        for probe in probes:
-            pairs.append((probe, ""))
-        return pairs, warnings
-
-    if len(responses) == 1 and len(probes) > 1:
-        warnings.append(
-            "Single response block provided for multiple prompts; "
-            "analysis uses the same text for each prompt. "
-            f"Separate responses with {RESPONSE_DELIMITER} for per-prompt assessment."
-        )
-        for probe in probes:
-            pairs.append((probe, responses[0]))
-        return pairs, warnings
-
-    for index, probe in enumerate(probes):
-        if index < len(responses):
-            pairs.append((probe, responses[index]))
-        else:
-            warnings.append(f"Missing response for prompt {probe.id}")
-            pairs.append((probe, ""))
-
-    if len(responses) > len(probes):
-        warnings.append(f"{len(responses) - len(probes)} extra response block(s) ignored")
-
-    return pairs, warnings
-
-
-def run_manual_assessment(
-    expected_identity: str,
-    response_text: str,
-    *,
-    mode: str = "quick",
-    requested_model: str | None = None,
-) -> VerificationReport:
-    probes = get_prompt_pack(expected_identity, mode)
-    responses = split_responses(response_text)
-    pairs, pairing_warnings = _pair_responses_to_probes(probes, responses)
-
-    results: list[ProbeResult] = []
-    for probe, text in pairs:
-        if not text:
-            results.append(
-                ProbeResult(
-                    probe_id=probe.id,
-                    probe_category=probe.category,
-                    outcome=ProbeOutcome.SKIP,
-                    warnings=["No response provided for this prompt"],
-                )
-            )
-            continue
-        response = ProviderResponse(text=text, model=requested_model, provider="manual")
-        results.append(evaluate_probe_result(probe, response, expected_identity))
-
-    metrics = compute_metrics(results)
-    route_metadata = RouteMetadata(
+def _manual_route_metadata(requested_model: str | None) -> RouteMetadata:
+    return RouteMetadata(
         requested_model=requested_model,
         metadata_available=False,
         metadata_opaque=True,
         match_type=RouteMatchType.METADATA_OPAQUE,
     )
 
-    warnings = [
+
+def _base_warnings() -> list[str]:
+    return [
         "Manual prompt mode: provider route metadata unavailable",
         (
             "Manual mode analyzes pasted responses only; "
             "it does not prove which model generated the output"
         ),
-        *pairing_warnings,
     ]
+
+
+def _append_finding(
+    report: VerificationReport,
+    finding_id: str,
+    reason: str,
+    *,
+    severity: str = "info",
+) -> None:
+    report.score_findings.append(
+        ScoreFinding(
+            id=finding_id,
+            severity=severity,
+            penalty=0,
+            reason=reason,
+        )
+    )
+
+
+def _finalize_report(report: VerificationReport) -> VerificationReport:
+    manual_findings = list(report.score_findings)
+    report = score_report(report)
+    report.score_findings = manual_findings + report.score_findings
+    report_dict = report.model_dump(mode="json")
+    report.report_hash = compute_report_hash(report_dict)
+    return report
+
+
+def _run_freeform_assessment(
+    expected_identity: str,
+    response_text: str,
+    *,
+    requested_model: str | None = None,
+) -> VerificationReport:
+    text = response_text.strip()
+    probe = get_probe(FREEFORM_PROBE_ID)
+    if not probe:
+        msg = f"Free-form probe not found: {FREEFORM_PROBE_ID}"
+        raise RuntimeError(msg)
+
+    results: list[ProbeResult] = []
+    errors: list[str] = []
+    if not text:
+        errors.append("No response text provided")
+        results.append(
+            ProbeResult(
+                probe_id=probe.id,
+                probe_category=probe.category,
+                outcome=ProbeOutcome.SKIP,
+                warnings=["No response text provided"],
+            )
+        )
+    else:
+        response = ProviderResponse(text=text, model=requested_model, provider="manual")
+        results.append(evaluate_probe_result(probe, response, expected_identity))
+        detection = detect_identity(text, expected_identity)
+        if is_false_identity(detection, expected_identity):
+            results.append(
+                ProbeResult(
+                    probe_id="manual-freeform-false-claim",
+                    probe_category=probe.category,
+                    outcome=ProbeOutcome.FAIL,
+                    response_text=redact_secrets(text),
+                    detection=detection,
+                    warnings=["Affirmed identity in free-form text does not match expected"],
+                )
+            )
+
+    metrics = compute_metrics(results)
+    warnings = [*_base_warnings(), FREEFORM_WARNING]
+    freeform_finding = ScoreFinding(
+        id="manual.freeform_assessment",
+        severity="info",
+        penalty=0,
+        reason=FREEFORM_WARNING,
+    )
 
     report = VerificationReport(
         tool_version=__version__,
@@ -118,20 +141,152 @@ def run_manual_assessment(
         provider="manual",
         requested_model=requested_model or "unknown",
         expected_identity=expected_identity,
-        route_metadata=route_metadata,
+        route_metadata=_manual_route_metadata(requested_model),
         verification_status=VerificationStatus.INCONCLUSIVE,
         confidence_score=100,
         risk_level=RiskLevel.LOW,
         metrics=metrics,
         warnings=warnings,
+        errors=errors,
         probe_results=results,
+        score_findings=[freeform_finding],
         manual_mode=True,
         dry_run=False,
     )
-    report = score_report(report)
-    report_dict = report.model_dump(mode="json")
-    report.report_hash = compute_report_hash(report_dict)
-    return report
+    return _finalize_report(report)
+
+
+def _run_pack_assessment(
+    expected_identity: str,
+    response_text: str,
+    *,
+    pack_mode: str,
+    requested_model: str | None = None,
+) -> VerificationReport:
+    probes = get_prompt_pack(expected_identity, pack_mode)
+    responses = split_responses(response_text)
+    expected_count = len(probes)
+    actual_count = len(responses)
+
+    pack_finding = ScoreFinding(
+        id="manual.prompt_pack_assessment",
+        severity="info",
+        penalty=0,
+        reason=f"Manual prompt-pack assessment ({pack_mode} mode)",
+    )
+
+    if actual_count == 0:
+        report = VerificationReport(
+            tool_version=__version__,
+            session_id=generate_session_id(),
+            timestamp=VerificationReport.now_timestamp(),
+            provider="manual",
+            requested_model=requested_model or "unknown",
+            expected_identity=expected_identity,
+            route_metadata=_manual_route_metadata(requested_model),
+            verification_status=VerificationStatus.ERROR,
+            confidence_score=0,
+            risk_level=RiskLevel.MEDIUM,
+            metrics=compute_metrics([]),
+            warnings=_base_warnings(),
+            errors=["No response text provided for prompt-pack assessment"],
+            probe_results=[],
+            score_findings=[
+                pack_finding,
+                ScoreFinding(
+                    id="manual.response_count_mismatch",
+                    severity="warning",
+                    penalty=0,
+                    reason=f"Expected {expected_count} responses, got 0",
+                ),
+            ],
+            manual_mode=True,
+            dry_run=False,
+        )
+        return _finalize_report(report)
+
+    if actual_count != expected_count:
+        mismatch = ScoreFinding(
+            id="manual.response_count_mismatch",
+            severity="warning",
+            penalty=0,
+            reason=(
+                f"Expected {expected_count} delimiter-separated responses for {pack_mode} "
+                f"pack, got {actual_count}. Use `miv prompt template` to collect responses."
+            ),
+        )
+        report = VerificationReport(
+            tool_version=__version__,
+            session_id=generate_session_id(),
+            timestamp=VerificationReport.now_timestamp(),
+            provider="manual",
+            requested_model=requested_model or "unknown",
+            expected_identity=expected_identity,
+            route_metadata=_manual_route_metadata(requested_model),
+            verification_status=VerificationStatus.INCONCLUSIVE,
+            confidence_score=0,
+            risk_level=RiskLevel.LOW_INFO,
+            metrics=compute_metrics([]),
+            warnings=[
+                *_base_warnings(),
+                mismatch.reason,
+            ],
+            errors=[
+                f"Response count mismatch: expected {expected_count}, got {actual_count}",
+            ],
+            probe_results=[],
+            score_findings=[pack_finding, mismatch],
+            manual_mode=True,
+            dry_run=False,
+        )
+        return report
+
+    results: list[ProbeResult] = []
+    for probe, text in zip(probes, responses, strict=True):
+        response = ProviderResponse(text=text, model=requested_model, provider="manual")
+        results.append(evaluate_probe_result(probe, response, expected_identity))
+
+    metrics = compute_metrics(results)
+    report = VerificationReport(
+        tool_version=__version__,
+        session_id=generate_session_id(),
+        timestamp=VerificationReport.now_timestamp(),
+        provider="manual",
+        requested_model=requested_model or "unknown",
+        expected_identity=expected_identity,
+        route_metadata=_manual_route_metadata(requested_model),
+        verification_status=VerificationStatus.INCONCLUSIVE,
+        confidence_score=100,
+        risk_level=RiskLevel.LOW,
+        metrics=metrics,
+        warnings=_base_warnings(),
+        probe_results=results,
+        score_findings=[pack_finding],
+        manual_mode=True,
+        dry_run=False,
+    )
+    return _finalize_report(report)
+
+
+def run_manual_assessment(
+    expected_identity: str,
+    response_text: str,
+    *,
+    pack_mode: str | None = None,
+    requested_model: str | None = None,
+) -> VerificationReport:
+    if pack_mode:
+        return _run_pack_assessment(
+            expected_identity,
+            response_text,
+            pack_mode=pack_mode,
+            requested_model=requested_model,
+        )
+    return _run_freeform_assessment(
+        expected_identity,
+        response_text,
+        requested_model=requested_model,
+    )
 
 
 def redact_manual_input(text: str) -> str:

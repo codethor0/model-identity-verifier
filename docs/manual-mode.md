@@ -19,9 +19,20 @@ Model self-identification is generated text. It is not attestation.
 
 ```bash
 miv prompt create --expected-identity chatgpt --mode quick
-miv prompt create --expected-identity claude --mode quick --format markdown -o prompts.md
-miv prompt assess --expected-identity chatgpt --response-file response.txt --format json -o report.json
+miv prompt template --expected-identity chatgpt --mode quick
+miv prompt assess --expected-identity chatgpt --response-file response.txt
+miv prompt assess --expected-identity chatgpt --response-file responses.txt --pack-mode quick
 ```
+
+## Assessment modes
+
+### Free-form (default)
+
+Omit `--pack-mode` to analyze a single pasted response as one block. The tool does not align the text to individual prompt-pack probes.
+
+### Prompt-pack
+
+Use `--pack-mode quick|standard|deep` when you collected one response per prompt using the response template. Response count must match prompt count or the report returns INCONCLUSIVE with `manual.response_count_mismatch`.
 
 ## Multiple responses
 

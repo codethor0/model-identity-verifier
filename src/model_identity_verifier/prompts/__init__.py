@@ -5,6 +5,7 @@ from model_identity_verifier.prompts.packs import (
     MANUAL_INSTRUCTIONS,
     RESPONSE_DELIMITER,
     format_prompt_pack,
+    format_response_template,
     get_prompt_pack,
 )
 
@@ -12,6 +13,7 @@ __all__ = [
     "MANUAL_INSTRUCTIONS",
     "RESPONSE_DELIMITER",
     "format_prompt_pack",
+    "format_response_template",
     "get_prompt_pack",
     "run_manual_assessment",
 ]

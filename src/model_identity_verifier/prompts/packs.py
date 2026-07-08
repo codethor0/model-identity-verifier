@@ -15,8 +15,9 @@ MANUAL_INSTRUCTIONS = (
     "Manual prompt mode does not call any provider API.\n"
     "Copy each prompt below into the model you are checking.\n"
     f"Save each response, separated by a line containing only: {RESPONSE_DELIMITER}\n"
-    "Feed the combined responses to: miv prompt assess --expected-identity <identity> "
-    "--response-file <file>\n"
+    "Feed pack responses to: miv prompt assess --expected-identity <identity> "
+    "--response-file <file> --pack-mode <quick|standard|deep>\n"
+    "For a single pasted response without prompt alignment, omit --pack-mode.\n"
     "Manual mode cannot verify provider route metadata or prove model identity.\n"
     "Model self-identification is generated text. It is not attestation."
 )
@@ -123,6 +124,37 @@ def _developer_hint(expected_identity: str) -> str:
     return f"Expected identity context: {key} (associated with {org})."
 
 
+def format_response_template(expected_identity: str, mode: str) -> str:
+    probes = get_prompt_pack(expected_identity, mode)
+    lines = [
+        "Model Identity Verifier — Response Collection Template",
+        f"Expected identity: {expected_identity}",
+        f"Mode: {mode}",
+        "",
+        "Copy each model response exactly below the matching slot.",
+        "Do not include API keys or private data.",
+        "Manual mode cannot verify provider route metadata.",
+        "",
+    ]
+    for index, probe in enumerate(probes, start=1):
+        lines.append(f"Paste response for prompt {index} ({probe.id}) below:")
+        lines.append(RESPONSE_DELIMITER)
+        lines.append("")
+    lines.append(
+        f"Save this file and run: miv prompt assess --expected-identity {expected_identity} "
+        f"--response-file <this-file> --pack-mode {mode}"
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _append_response_template(lines: list[str], expected_identity: str, mode: str) -> None:
+    lines.append("")
+    lines.append("## Response collection template")
+    lines.append("")
+    template_lines = format_response_template(expected_identity, mode).splitlines()
+    lines.extend(template_lines)
+
+
 def format_prompt_pack(
     expected_identity: str,
     mode: str,
@@ -170,6 +202,7 @@ def format_prompt_pack(
             lines.append("")
             lines.append(probe.prompt)
             lines.append("")
+        _append_response_template(lines, expected_identity, mode)
         return "\n".join(lines)
 
     lines.append("Model Identity Verifier — Manual Prompt Pack")
@@ -183,4 +216,5 @@ def format_prompt_pack(
         lines.append(f"--- Prompt {index}: {probe.id} ({probe.language}) ---")
         lines.append(probe.prompt)
         lines.append("")
+    _append_response_template(lines, expected_identity, mode)
     return "\n".join(lines)

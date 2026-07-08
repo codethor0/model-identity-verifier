@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2026-07-08
+
+### Added
+
+- Manual prompt mode for users without provider API keys.
+- Free-form and prompt-pack response assessment.
+- `miv prompt template` response collection template.
+- Docker validation workflow and local Docker smoke support.
+- Expanded multilingual integrity probes and tests.
+- README workflow diagram.
+
+### Fixed
+
+- Correct project repository metadata URLs.
+- Manual prompt assessment no longer duplicates one response across all prompt-pack probes by default.
+
+### Notes
+
+- Manual prompt mode analyzes pasted responses only. It cannot verify provider route metadata or prove which model generated an output.
+
 ## [0.1.2] - 2026-07-08
 
 ### Added

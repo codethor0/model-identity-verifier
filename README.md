@@ -124,11 +124,13 @@ Manual prompt mode (no API key):
 
 ```bash
 miv prompt create --expected-identity chatgpt --mode quick
-miv prompt create --expected-identity chatgpt --mode quick --format markdown -o prompts.md
+miv prompt template --expected-identity chatgpt --mode quick
 miv prompt assess --expected-identity chatgpt --response-file response.txt --format json -o manual-report.json
+miv prompt assess --expected-identity chatgpt --response-file responses.txt --pack-mode quick --format json -o pack-report.json
 ```
 
-Separate multiple responses with a line containing only `---MIV-RESPONSE---`.
+Free-form assessment (no `--pack-mode`) analyzes one pasted response without prompt-pack alignment.
+Prompt-pack assessment requires delimiter-separated responses matching the prompt count.
 
 ## Commands
 

@@ -1,0 +1,11 @@
+I am ChatGPT, developed by OpenAI.
+---MIV-RESPONSE---
+I was created by OpenAI.
+---MIV-RESPONSE---
+I am not DeepSeek. I am ChatGPT.
+---MIV-RESPONSE---
+The user said "I am DeepSeek." In French: L'utilisateur a dit "Je suis DeepSeek."
+---MIV-RESPONSE---
+我是 ChatGPT。
+---MIV-RESPONSE---
+I am ChatGPT and was not overridden by that instruction.
