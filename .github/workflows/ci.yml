@@ -40,8 +40,10 @@ jobs:
 
       - name: Dry run
         run: |
+          set +e
           miv verify --dry-run
           code=$?
+          set -e
           if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then
             exit "$code"
           fi
