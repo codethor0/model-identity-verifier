@@ -10,6 +10,7 @@ build/
 *.egg-info/
 .miv/reports/
 .miv/baselines/
+.miv/prompts/
 *.log
 *.tmp
 identity_report*.json

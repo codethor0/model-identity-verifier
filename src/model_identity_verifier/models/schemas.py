@@ -159,6 +159,7 @@ class VerificationReport(BaseModel):
     score_findings: list[ScoreFinding] = Field(default_factory=list)
     report_hash: str = ""
     dry_run: bool = False
+    manual_mode: bool = False
     schema_version: str = SCHEMA_VERSION
     detector_version: str = DETECTOR_VERSION
     scoring_version: str = SCORING_VERSION

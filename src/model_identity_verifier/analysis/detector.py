@@ -75,6 +75,8 @@ def _is_negated_at(text: str, start: int, end: int | None = None) -> bool:
             r"아닙니다",
             r"아니",
             r"가\s+아닙",
+            r"नहीं\s*हूँ",
+            r"नहीं",
         ]
         return any(re.search(p, after_snippet, re.IGNORECASE) for p in post_neg)
     return False

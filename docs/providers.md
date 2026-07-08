@@ -1,5 +1,15 @@
 # Providers
 
+## Verification modes
+
+### API mode (`miv verify`)
+
+Calls the provider API using user-supplied credentials. Inspects responses and any metadata the provider exposes.
+
+### Manual prompt mode (`miv prompt`)
+
+Does not call providers. Users copy generated prompts into an LLM interface and paste responses back for analysis. See [manual-mode.md](manual-mode.md).
+
 ## Supported providers
 
 | Name | API | Env key |

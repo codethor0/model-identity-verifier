@@ -22,3 +22,7 @@ Baselines are local evidence for drift detection, not proof of identity.
 ## Reports
 
 Reports may contain model responses. Review before sharing externally.
+
+## Manual prompt mode
+
+Manual prompt mode analyzes pasted responses only. It cannot verify provider route metadata or prove model identity. See [manual-mode.md](manual-mode.md).

@@ -173,6 +173,10 @@ AFFIRM_PATTERNS: list[str] = [
     r"sou\s+",
     r"저는",
     r"나는",
+    r"أنا",
+    r"मैं",
+    r"я\s+",
+    r"sono\s+",
 ]
 
 DEVELOPER_CLAIM_PATTERNS: list[str] = [

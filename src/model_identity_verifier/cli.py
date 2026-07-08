@@ -23,6 +23,8 @@ from model_identity_verifier.engine.verifier import run_verification
 from model_identity_verifier.models.enums import VerificationStatus
 from model_identity_verifier.models.schemas import VerificationReport
 from model_identity_verifier.probes.registry import get_probe, list_probes, validate_registry
+from model_identity_verifier.prompts.assessor import run_manual_assessment
+from model_identity_verifier.prompts.packs import format_prompt_pack
 from model_identity_verifier.providers.base import (
     MissingApiKeyError,
     ProviderError,
@@ -310,6 +312,71 @@ def cmd_reports_compare(args: argparse.Namespace) -> int:
     return EXIT_SUCCESS
 
 
+def _write_output(content: str, output_path: Path | None) -> None:
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(content, encoding="utf-8")
+
+
+def cmd_prompt_create(args: argparse.Namespace) -> int:
+    _warn_unknown_expected_identity(args.expected_identity)
+    content = format_prompt_pack(args.expected_identity, args.mode, args.format)
+    output_path = Path(args.output) if args.output else None
+    if output_path:
+        _write_output(content, output_path)
+    else:
+        print(content)
+    return EXIT_SUCCESS
+
+
+def cmd_prompt_assess(args: argparse.Namespace) -> int:
+    if args.output and args.save:
+        print("Error: --output and --save cannot be used together", file=sys.stderr)
+        return EXIT_ERROR
+
+    output_path = Path(args.output or args.save) if (args.output or args.save) else None
+    _warn_unknown_expected_identity(args.expected_identity)
+
+    if args.stdin:
+        response_text = sys.stdin.read()
+    elif args.response_file:
+        response_path = Path(args.response_file)
+        if not response_path.exists():
+            print(f"Response file not found: {response_path}", file=sys.stderr)
+            return EXIT_ERROR
+        response_text = response_path.read_text(encoding="utf-8")
+    else:
+        print("Error: provide --response-file or --stdin", file=sys.stderr)
+        return EXIT_ERROR
+
+    report = run_manual_assessment(
+        args.expected_identity,
+        response_text,
+        mode=args.mode,
+        requested_model=args.model,
+    )
+
+    if output_path:
+        suffix = output_path.suffix.lower()
+        if suffix == ".json" or args.format == "json":
+            save_json_report(report, output_path)
+        elif suffix in (".md", ".markdown") or args.format == "markdown":
+            save_markdown_report(report, output_path)
+        else:
+            save_json_report(report, output_path)
+
+    if args.format == "json" and not output_path:
+        print(json.dumps(report.model_dump(mode="json"), indent=2))
+    elif args.format == "markdown" and not output_path:
+        from model_identity_verifier.reports.markdown_report import render_markdown_report
+
+        print(render_markdown_report(report))
+    else:
+        render_terminal_report(report)
+
+    return _exit_code(report.verification_status)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="miv",
@@ -393,6 +460,37 @@ def build_parser() -> argparse.ArgumentParser:
     reports_compare.add_argument("report_a", help="First report JSON path")
     reports_compare.add_argument("report_b", help="Second report JSON path")
     reports_compare.set_defaults(func=cmd_reports_compare)
+
+    prompt_parser = subparsers.add_parser(
+        "prompt",
+        help="Manual prompt-mode integrity checks (no API calls)",
+    )
+    prompt_sub = prompt_parser.add_subparsers(dest="prompt_command", required=True)
+
+    prompt_create = prompt_sub.add_parser("create", help="Generate manual prompt pack")
+    prompt_create.add_argument(
+        "--expected-identity", default="chatgpt", help="Expected model identity"
+    )
+    prompt_create_modes = ["quick", "standard", "deep"]
+    prompt_create.add_argument("--mode", default="quick", choices=prompt_create_modes)
+    prompt_create.add_argument("--format", default="text", choices=["text", "markdown", "json"])
+    prompt_create.add_argument("--output", "-o", default=None, help="Output file path")
+    prompt_create.set_defaults(func=cmd_prompt_create)
+
+    prompt_assess = prompt_sub.add_parser("assess", help="Assess pasted model responses")
+    prompt_assess.add_argument(
+        "--expected-identity", default="chatgpt", help="Expected model identity"
+    )
+    prompt_assess.add_argument("--mode", default="quick", choices=prompt_create_modes)
+    prompt_assess.add_argument("--model", default=None, help="User-supplied model label")
+    prompt_assess.add_argument("--response-file", default=None, help="Response text file")
+    prompt_assess.add_argument("--stdin", action="store_true", help="Read response from stdin")
+    prompt_assess.add_argument(
+        "--format", default="terminal", choices=["terminal", "json", "markdown"]
+    )
+    prompt_assess.add_argument("--output", "-o", default=None, help="Output report path")
+    prompt_assess.add_argument("--save", default=None, help="Alias for --output")
+    prompt_assess.set_defaults(func=cmd_prompt_assess)
 
     return parser
 

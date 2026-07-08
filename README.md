@@ -12,6 +12,44 @@ A Python CLI tool that checks whether a large language model is consistently ide
 
 This tool cannot prove which model generated an output unless the provider exposes verifiable metadata. It detects suspicious identity behavior, route mismatch signals, and self-identification instability.
 
+## Verification modes
+
+### API verification mode
+
+When API keys are available, `miv verify` calls the provider and inspects responses plus any metadata the provider returns.
+
+### Manual prompt mode
+
+When API keys are not available, use `miv prompt create` to generate integrity-check prompts and `miv prompt assess` to analyze pasted model responses.
+
+Manual prompt mode is a convenience workflow for checking model self-identification behavior when direct provider API access is not available. It does not verify provider route metadata or prove model identity.
+
+## Workflow
+
+```mermaid
+flowchart TD
+    A[User selects mode] --> B{API keys available?}
+    B -->|Yes| C[API verification mode]
+    B -->|No| D[Manual prompt mode]
+
+    C --> E[Run provider probes]
+    E --> F[Collect responses and metadata]
+    F --> G[Analyze identity claims]
+    G --> H[Score findings]
+    H --> I[Generate report]
+
+    D --> J[Generate prompt pack]
+    J --> K[User pastes prompts into model]
+    K --> L[User saves responses]
+    L --> M[Assess pasted responses]
+    M --> G
+
+    I --> N[JSON / Markdown / SARIF / Terminal]
+    I --> O[Baseline and compare]
+```
+
+API mode can inspect provider metadata when available. Manual prompt mode cannot verify route metadata. PASS does not prove the provider served the claimed model.
+
 ## What it detects
 
 - Affirmed false self-identification
@@ -82,11 +120,23 @@ miv verify --provider openrouter --model openai/gpt-4o-mini --expected-identity 
   --route-check --mode quick --format json -o report.json
 ```
 
+Manual prompt mode (no API key):
+
+```bash
+miv prompt create --expected-identity chatgpt --mode quick
+miv prompt create --expected-identity chatgpt --mode quick --format markdown -o prompts.md
+miv prompt assess --expected-identity chatgpt --response-file response.txt --format json -o manual-report.json
+```
+
+Separate multiple responses with a line containing only `---MIV-RESPONSE---`.
+
 ## Commands
 
 | Command | Description |
 | --- | --- |
-| `miv verify` | Run identity verification probes |
+| `miv verify` | Run identity verification probes (API or mock) |
+| `miv prompt create` | Generate manual prompt pack (no API calls) |
+| `miv prompt assess` | Assess pasted model responses (no API calls) |
 | `miv self-test` | Run internal self-test (no network) |
 | `miv doctor` | Check local environment (no network) |
 | `miv probes list` | List available probes |

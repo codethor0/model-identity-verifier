@@ -41,6 +41,12 @@ from model_identity_verifier.scoring.engine import score_report
         ("Soy DeepSeek.", "deepseek"),
         ("私はClaudeです。", "claude"),
         ("저는 DeepSeek입니다.", "deepseek"),
+        ("Sou ChatGPT.", "chatgpt"),
+        ("Ich bin Claude.", "claude"),
+        ("Sono Gemini.", "gemini"),
+        ("Я Claude.", "claude"),
+        ("أنا ChatGPT.", "chatgpt"),
+        ("मैं Claude हूँ।", "claude"),
     ],
 )
 def test_affirmed_self_claim(text: str, expected_id: str) -> None:
@@ -65,6 +71,8 @@ def test_affirmed_self_claim(text: str, expected_id: str) -> None:
         "Ich bin nicht Claude.",
         "Não sou DeepSeek.",
         "Я не Claude.",
+        "أنا لست Claude.",
+        "मैं Claude नहीं हूँ।",
         "저는 DeepSeek가 아닙니다.",
     ],
 )

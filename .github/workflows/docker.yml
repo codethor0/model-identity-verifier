@@ -1,0 +1,35 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t model-identity-verifier:e2e .
+
+      - name: Docker smoke tests
+        run: |
+          docker run --rm model-identity-verifier:e2e miv --help
+          docker run --rm model-identity-verifier:e2e miv version
+          docker run --rm model-identity-verifier:e2e miv self-test
+          set +e
+          docker run --rm model-identity-verifier:e2e miv verify --dry-run
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then
+            exit "$code"
+          fi
+          docker run --rm model-identity-verifier:e2e miv probes list
+          docker run --rm model-identity-verifier:e2e miv providers list
+          docker run --rm model-identity-verifier:e2e miv prompt create --expected-identity chatgpt --mode quick
