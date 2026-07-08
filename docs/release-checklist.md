@@ -34,6 +34,12 @@ Exit codes:
 - `2` — Docker OK, keys missing
 - `1` — failure; do not tag
 
+After successful live smoke, review tag readiness:
+
+```bash
+bash scripts/post_smoke_tag_gate.sh
+```
+
 Manual per-provider commands (if not using the script):
 
 ```bash

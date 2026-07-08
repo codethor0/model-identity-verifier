@@ -35,6 +35,12 @@ set -e
 
 echo "Docker live smoke exit code: $SMOKE_EXIT"
 
+if [ "$SMOKE_EXIT" -eq 0 ]; then
+  bash scripts/post_smoke_tag_gate.sh
+  TAG_EXIT=$?
+  echo "Tag gate exit code: $TAG_EXIT"
+fi
+
 unset OPENAI_API_KEY ANTHROPIC_API_KEY OPENROUTER_API_KEY
 
 python3 - <<'PY'
