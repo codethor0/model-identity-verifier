@@ -35,47 +35,7 @@ for name in ["OPENAI_API_KEY", "OPENROUTER_API_KEY"]:
 PY
 
 echo "==> OpenRouter key validation (/api/v1/key)"
-OPENROUTER_KEY_OK=0
-python3 - <<'PY'
-import json
-import os
-import sys
-import tempfile
-from pathlib import Path
-
-import httpx
-
-key = os.getenv("OPENROUTER_API_KEY")
-if not key:
-    print("OPENROUTER_API_KEY: missing")
-    sys.exit(2)
-
-tmp = Path(tempfile.mkstemp(prefix="openrouter-key-check-", suffix=".json")[1])
-try:
-    response = httpx.get(
-        "https://openrouter.ai/api/v1/key",
-        headers={"Authorization": f"Bearer {key}"},
-        timeout=30.0,
-    )
-    tmp.write_text(response.text)
-    print("OpenRouter key validation HTTP status:", response.status_code)
-    if response.status_code != 200:
-        print("OpenRouter key validation failed. Do not run OpenRouter smoke yet.")
-        sys.exit(1)
-    data = response.json()
-    info = data.get("data", {})
-    print("OpenRouter key active:", bool(info))
-    print("OpenRouter limit_remaining_present:", "limit_remaining" in info)
-    print("OpenRouter is_free_tier:", info.get("is_free_tier"))
-    print("OpenRouter disabled:", info.get("disabled"))
-finally:
-    tmp.unlink(missing_ok=True)
-
-print("OpenRouter key validation passed.")
-PY
-OPENROUTER_KEY_OK=$?
-
-if [ "$OPENROUTER_KEY_OK" -ne 0 ]; then
+if ! miv providers check --provider openrouter; then
   echo "OpenRouter auth validation failed. Fix key before OpenRouter smoke." >&2
   unset OPENAI_API_KEY OPENROUTER_API_KEY
   exit 1

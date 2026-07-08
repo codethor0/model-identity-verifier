@@ -26,6 +26,10 @@ class MissingApiKeyError(ProviderError):
     pass
 
 
+class InvalidApiKeyError(ProviderError):
+    pass
+
+
 class UnknownProviderError(ProviderError):
     pass
 
@@ -53,6 +57,11 @@ class BaseProvider(ABC):
             )
             raise MissingApiKeyError(msg, provider=self.name)
         return self.api_key
+
+    def validate_key(self) -> dict[str, Any]:
+        """Confirm the configured API key is present. Network validation is provider-specific."""
+        self.require_api_key()
+        return {"provider": self.name, "status": "present"}
 
     def _safe_error_message(self, exc: Exception, context: str = "") -> str:
         parts = [context, str(exc)]
@@ -342,14 +351,57 @@ class OpenRouterProvider(OpenAICompatibleProvider):
     name = "openrouter"
     env_key = "OPENROUTER_API_KEY"
     base_url = "https://openrouter.ai/api/v1"
+    key_endpoint = "https://openrouter.ai/api/v1/key"
+
+    def validate_key(self) -> dict[str, Any]:
+        api_key = self.require_api_key()
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.get(
+                    self.key_endpoint,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+        except httpx.HTTPError as exc:
+            msg = self._safe_error_message(exc, "OpenRouter key validation failed:")
+            raise ProviderError(msg, provider=self.name) from exc
+
+        if response.status_code == 401:
+            msg = (
+                "OpenRouter API key is invalid or unauthorized. "
+                "Check OPENROUTER_API_KEY at https://openrouter.ai/keys"
+            )
+            raise InvalidApiKeyError(msg, provider=self.name)
+        if response.status_code != 200:
+            msg = (
+                f"OpenRouter key validation failed with HTTP {response.status_code}. "
+                "Verify OPENROUTER_API_KEY and account status."
+            )
+            raise InvalidApiKeyError(msg, provider=self.name)
+
+        data = response.json()
+        info = data.get("data", {})
+        if info.get("disabled"):
+            msg = "OpenRouter API key is disabled. Enable the key in OpenRouter settings."
+            raise InvalidApiKeyError(msg, provider=self.name)
+
+        return {
+            "provider": self.name,
+            "status": "valid",
+            "http_status": response.status_code,
+            "active": bool(info),
+            "limit_remaining_present": "limit_remaining" in info,
+            "is_free_tier": info.get("is_free_tier"),
+            "disabled": bool(info.get("disabled")),
+        }
 
     def complete(self, prompt: str, model: str, **kwargs: Any) -> ProviderResponse:
         response = super().complete(prompt, model, **kwargs)
         raw = response.raw_metadata
-        upstream = raw.get("provider") or raw.get("system_fingerprint")
+        upstream = raw.get("provider")
         if response.route_metadata:
             response.route_metadata.router_name = "openrouter"
-            response.route_metadata.upstream_provider = str(upstream) if upstream else None
+            if upstream:
+                response.route_metadata.upstream_provider = str(upstream)
         return response
 
 

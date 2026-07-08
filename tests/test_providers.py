@@ -1,11 +1,16 @@
 """Tests for providers."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from model_identity_verifier.models.enums import RouteMatchType
+from model_identity_verifier.models.schemas import ProviderResponse, RouteMetadata
 from model_identity_verifier.providers.base import (
+    InvalidApiKeyError,
     MissingApiKeyError,
     OpenAICompatibleProvider,
+    OpenRouterProvider,
     ProviderError,
     UnknownProviderError,
     get_provider,
@@ -94,3 +99,61 @@ def test_route_metadata_upstream_provider() -> None:
     provider = OpenAICompatibleProvider(api_key="test")
     route = provider.normalize_route_metadata("gpt-4o", "gpt-4o", {"provider": "openai"})
     assert route.upstream_provider == "openai"
+
+
+def test_openrouter_validate_key_missing() -> None:
+    provider = OpenRouterProvider()
+    with pytest.raises(MissingApiKeyError):
+        provider.validate_key()
+
+
+def test_openrouter_validate_key_invalid() -> None:
+    provider = OpenRouterProvider(api_key="test-key")
+    response = MagicMock()
+    response.status_code = 401
+    response.json.return_value = {"error": "unauthorized"}
+
+    with patch("httpx.Client") as client_cls:
+        client = client_cls.return_value.__enter__.return_value
+        client.get.return_value = response
+        with pytest.raises(InvalidApiKeyError):
+            provider.validate_key()
+
+
+def test_openrouter_validate_key_success() -> None:
+    provider = OpenRouterProvider(api_key="test-key")
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {"data": {"is_free_tier": False, "disabled": False}}
+
+    with patch("httpx.Client") as client_cls:
+        client = client_cls.return_value.__enter__.return_value
+        client.get.return_value = response
+        result = provider.validate_key()
+
+    assert result["status"] == "valid"
+    assert result["active"] is True
+
+
+def test_openrouter_complete_sets_upstream_from_provider_only() -> None:
+    provider = OpenRouterProvider(api_key="test-key")
+    parent_response = ProviderResponse(
+        text="ok",
+        model="openai/gpt-4o-mini",
+        provider="openrouter",
+        raw_metadata={"provider": "openai", "system_fingerprint": "fp_test"},
+        route_metadata=RouteMetadata(
+            requested_provider="openrouter",
+            requested_model="openai/gpt-4o-mini",
+            returned_model="openai/gpt-4o-mini",
+            metadata_available=True,
+            match_type=RouteMatchType.EXACT_MATCH,
+        ),
+    )
+
+    with patch.object(OpenAICompatibleProvider, "complete", return_value=parent_response):
+        response = provider.complete("hello", "openai/gpt-4o-mini")
+
+    assert response.route_metadata is not None
+    assert response.route_metadata.router_name == "openrouter"
+    assert response.route_metadata.upstream_provider == "openai"

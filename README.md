@@ -238,7 +238,22 @@ python -m pytest
 python -m build
 miv self-test
 miv doctor
+bash scripts/e2e_local.sh
 ```
+
+## Release validation
+
+v0.1.3 remains held until live provider smoke gates pass. See [docs/release-checklist.md](docs/release-checklist.md).
+
+```bash
+bash scripts/run_local_smoke_runbook.sh
+miv reports inspect --glob '*v013-smoke.json'
+miv reports gate --release v0.1.3
+```
+
+OpenAI `429 insufficient_quota` indicates API Platform billing/quota limits, not a tool defect.
+ChatGPT subscription billing does not include API Platform credits.
+Manual/browser prompt mode is integrity testing only and cannot replace live provider smoke.
 
 ## Security
 

@@ -4,7 +4,7 @@
 
 - [ ] `ruff format --check .` passes
 - [ ] `ruff check .` passes
-- [ ] `python -m pytest` passes (135+ tests)
+- [ ] `python -m pytest` passes (155+ tests)
 - [ ] `python -m build` passes
 - [ ] `twine check dist/*` passes
 - [ ] `miv self-test` passes
@@ -15,11 +15,25 @@
 ## Live provider smoke tests
 
 Required before tagging. Prefer hidden terminal input; do not write keys to disk.
+Do not store release smoke keys in `.env`. Export them in the current shell session only,
+or use `read -s` via the runbook scripts below.
+
+OpenAI `429 insufficient_quota` is external API Platform billing/quota, not a tool defect.
+ChatGPT subscription billing is separate from OpenAI API Platform credits.
+
+Manual/browser prompt reports (`manual_mode=true`) are integrity testing only and cannot
+satisfy the live provider smoke gate for v0.1.3.
 
 Interactive Docker gate (recommended):
 
 ```bash
 bash scripts/run_live_smoke_interactive.sh
+```
+
+Local runbook with `read -s` key entry and gate review:
+
+```bash
+bash scripts/run_local_smoke_runbook.sh
 ```
 
 Or export keys in the current shell session only, then:
@@ -38,6 +52,27 @@ After successful live smoke, review tag readiness:
 
 ```bash
 bash scripts/post_smoke_tag_gate.sh
+miv reports inspect --glob '*v013-smoke.json'
+miv reports gate --release v0.1.3
+```
+
+### Smoke scripts
+
+| Script | Purpose | Gate-eligible |
+| --- | --- | --- |
+| `scripts/run_local_smoke_runbook.sh` | Full local live smoke with `read -s` keys | yes |
+| `scripts/run_live_smoke_interactive.sh` | Docker live smoke + gate review | yes |
+| `scripts/e2e_docker_live.sh` | Docker live smoke only | yes |
+| `scripts/run_openai_smoke_interactive.sh` | OpenAI-only partial smoke | partial |
+| `scripts/run_anthropic_smoke_interactive.sh` | Anthropic-only partial smoke | partial |
+| `scripts/run_remaining_smoke_interactive.sh` | OpenAI + OpenRouter partial smoke | partial |
+| `scripts/run_openai_prompt_smoke.sh` | Manual/browser prompt workflow | no (`manual_mode=true`) |
+| `scripts/post_smoke_tag_gate.sh` | Review existing live smoke reports | review only |
+
+OpenRouter key validation before smoke:
+
+```bash
+miv providers check --provider openrouter
 ```
 
 Manual per-provider commands (if not using the script):
@@ -56,6 +91,9 @@ miv verify --provider openrouter --model openai/gpt-4o-mini --expected-identity 
 ```
 
 Required providers for full v0.1.3 gate: OpenAI, Anthropic, OpenRouter.
+
+v0.1.3 remains held until all three live smoke reports are present and acceptable.
+Do not tag while OpenAI quota is blocked or OpenRouter smoke is missing.
 
 ## Secret check
 

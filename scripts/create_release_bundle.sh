@@ -143,7 +143,7 @@ cat >"$BUNDLE_DIR/source-inventory.md" <<'EOF'
 ## Core modules
 - src/model_identity_verifier/cli.py
 - src/model_identity_verifier/prompts/ (manual mode)
-- src/model_identity_verifier/probes/registry.py (23 probes)
+- src/model_identity_verifier/probes/registry.py (56 registry probes)
 - src/model_identity_verifier/analysis/detector.py
 
 ## Infrastructure

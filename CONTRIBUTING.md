@@ -21,7 +21,12 @@ python -m pytest
 python -m build
 miv self-test
 miv verify --dry-run
+miv doctor
+bash scripts/e2e_local.sh
 ```
+
+Live provider smoke and release gate review are documented in [docs/release-checklist.md](docs/release-checklist.md).
+Use `miv reports inspect` and `miv reports gate` to review existing smoke JSON locally without API keys.
 
 ## Guidelines
 

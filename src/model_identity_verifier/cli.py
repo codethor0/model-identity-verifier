@@ -30,6 +30,7 @@ from model_identity_verifier.prompts.packs import (
     format_response_template,
 )
 from model_identity_verifier.providers.base import (
+    InvalidApiKeyError,
     MissingApiKeyError,
     ProviderError,
     get_provider,
@@ -39,6 +40,13 @@ from model_identity_verifier.reports.json_report import save_json_report
 from model_identity_verifier.reports.markdown_report import save_markdown_report
 from model_identity_verifier.reports.sarif_report import save_sarif_report
 from model_identity_verifier.reports.terminal import render_terminal_report
+from model_identity_verifier.smoke_gate import (
+    evaluate_gate,
+    gate_exit_code,
+    inspect_paths,
+    print_gate_result,
+    print_inspection,
+)
 
 EXIT_SUCCESS = 0
 EXIT_WARN = 1
@@ -316,6 +324,55 @@ def cmd_reports_compare(args: argparse.Namespace) -> int:
     return EXIT_SUCCESS
 
 
+def cmd_reports_inspect(args: argparse.Namespace) -> int:
+    report_dir = Path(args.report_dir)
+    if not report_dir.is_dir():
+        print(f"Report directory not found: {report_dir}", file=sys.stderr)
+        return EXIT_ERROR
+
+    summaries = inspect_paths(report_dir, args.glob)
+    if not summaries:
+        print(f"No reports matched {args.glob} in {report_dir}", file=sys.stderr)
+        return EXIT_FAIL
+
+    print_inspection(summaries)
+    return EXIT_SUCCESS
+
+
+def cmd_reports_gate(args: argparse.Namespace) -> int:
+    report_dir = Path(args.report_dir)
+    if not report_dir.is_dir():
+        print(f"Report directory not found: {report_dir}", file=sys.stderr)
+        return EXIT_ERROR
+
+    result = evaluate_gate(report_dir, release=args.release)
+    print_gate_result(result)
+    return gate_exit_code(result)
+
+
+def cmd_providers_check(args: argparse.Namespace) -> int:
+    try:
+        provider = get_provider(args.provider)
+    except ProviderError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_ERROR
+
+    try:
+        result = provider.validate_key()
+    except MissingApiKeyError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_FAIL
+    except InvalidApiKeyError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_ERROR
+    except ProviderError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_ERROR
+
+    print(json.dumps(result, indent=2))
+    return EXIT_SUCCESS
+
+
 def _write_output(content: str, output_path: Path | None) -> None:
     if output_path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -465,6 +522,15 @@ def build_parser() -> argparse.ArgumentParser:
     providers_list = providers_sub.add_parser("list", help="List providers")
     providers_list.set_defaults(func=cmd_providers_list)
 
+    providers_check = providers_sub.add_parser("check", help="Validate provider API key")
+    providers_check.add_argument(
+        "--provider",
+        required=True,
+        choices=["openrouter"],
+        help="Provider to validate (network call for OpenRouter)",
+    )
+    providers_check.set_defaults(func=cmd_providers_check)
+
     baseline_parser = subparsers.add_parser("baseline", help="Baseline management")
     baseline_sub = baseline_parser.add_subparsers(dest="baseline_command", required=True)
 
@@ -486,6 +552,28 @@ def build_parser() -> argparse.ArgumentParser:
     reports_compare.add_argument("report_a", help="First report JSON path")
     reports_compare.add_argument("report_b", help="Second report JSON path")
     reports_compare.set_defaults(func=cmd_reports_compare)
+
+    reports_inspect = reports_sub.add_parser("inspect", help="Inspect smoke report summaries")
+    reports_inspect.add_argument(
+        "--report-dir",
+        default=".miv/reports",
+        help="Directory containing report JSON files",
+    )
+    reports_inspect.add_argument(
+        "--glob",
+        default="*v013-smoke.json",
+        help="Glob pattern for reports to inspect",
+    )
+    reports_inspect.set_defaults(func=cmd_reports_inspect)
+
+    reports_gate = reports_sub.add_parser("gate", help="Evaluate v0.1.3 live smoke release gate")
+    reports_gate.add_argument(
+        "--report-dir",
+        default=".miv/reports",
+        help="Directory containing required smoke JSON files",
+    )
+    reports_gate.add_argument("--release", default="v0.1.3", help="Release version label")
+    reports_gate.set_defaults(func=cmd_reports_gate)
 
     prompt_parser = subparsers.add_parser(
         "prompt",
