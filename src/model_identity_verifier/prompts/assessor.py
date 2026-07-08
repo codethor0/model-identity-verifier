@@ -14,6 +14,7 @@ from model_identity_verifier.models.enums import (
     VerificationStatus,
 )
 from model_identity_verifier.models.schemas import (
+    Probe,
     ProbeResult,
     ProviderResponse,
     RouteMetadata,
@@ -72,7 +73,7 @@ def split_probe_id_responses(response_text: str, probe_ids: list[str]) -> list[s
     return ordered
 
 
-def resolve_pack_responses(response_text: str, probes: list) -> tuple[list[str], str | None]:
+def resolve_pack_responses(response_text: str, probes: list[Probe]) -> tuple[list[str], str | None]:
     probe_ids = [probe.id for probe in probes]
     by_probe_id = split_probe_id_responses(response_text, probe_ids)
     if by_probe_id is not None:

@@ -1,6 +1,7 @@
 """Tests for manual prompt-mode workflow."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -66,6 +67,17 @@ def test_response_template_includes_delimiter_instructions() -> None:
     template = format_response_template("chatgpt", "quick")
     assert "Paste response for prompt 1" in template
     assert "--pack-mode quick" in template
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_count"),
+    [("quick", 10), ("standard", 33), ("deep", 57)],
+)
+def test_browser_prompt_probe_id_line_counts(mode: str, expected_count: int) -> None:
+    content = format_prompt_pack("chatgpt", mode, "browser")
+    probe_lines = re.findall(r"^\[[a-z0-9-]+\]$", content, flags=re.MULTILINE)
+    assert len(probe_lines) == expected_count
+    assert "[probe-id]" not in content
 
 
 def test_freeform_assessment_consistent_chatgpt() -> None:

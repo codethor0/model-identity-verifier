@@ -111,7 +111,11 @@ def scan_secrets(paths: list[Path]) -> list[str]:
 
 
 def _load_report(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        msg = f"Expected JSON object in {path}"
+        raise ValueError(msg)
+    return data
 
 
 def evaluate_gate(

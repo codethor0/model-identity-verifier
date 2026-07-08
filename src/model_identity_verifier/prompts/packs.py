@@ -17,7 +17,7 @@ MANUAL_INSTRUCTIONS = (
     "Manual prompt mode does not call any provider API.\n"
     "Copy each prompt below into the model you are checking, or paste one browser prompt.\n"
     f"Save each response, separated by a line containing only: {RESPONSE_DELIMITER}\n"
-    "Or use probe-id format: [probe-id] on its own line followed by the answer.\n"
+    "Or use probe-id format: <probe-id> on its own line followed by the answer.\n"
     "Feed pack responses to: miv prompt assess --expected-identity <identity> "
     "--response-file <file> --pack-mode <quick|standard|deep>\n"
     "For a single pasted response without prompt alignment, omit --pack-mode.\n"
@@ -37,7 +37,7 @@ BROWSER_PROMPT_RULES = (
     "- Preserve each probe ID exactly.\n"
     "- Use this format:\n"
     "\n"
-    "[probe-id]\n"
+    "<probe-id>\n"
     "<answer>\n"
     "\n"
     "Begin."
@@ -214,7 +214,7 @@ def format_response_template(expected_identity: str, mode: str) -> str:
         f"Mode: {mode}",
         "",
         "Copy each model response exactly below the matching slot.",
-        "Probe-id format is also accepted: [probe-id] then answer.",
+        "Probe-id format is also accepted: <probe-id> then answer.",
         "Do not include API keys or private data.",
         "Manual mode cannot verify provider route metadata.",
         "",

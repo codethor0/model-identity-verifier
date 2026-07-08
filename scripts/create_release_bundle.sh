@@ -166,6 +166,11 @@ cat >"$BUNDLE_DIR/reviewer-runbook.md" <<'EOF'
 4. miv prompt assess --expected-identity chatgpt --response-file tests/fixtures/manual/chatgpt_consistent.txt
 5. miv prompt assess --expected-identity chatgpt --pack-mode quick --response-file tests/fixtures/manual/chatgpt_pack_quick.txt
 6. docker build -t model-identity-verifier:e2e . && docker run --rm model-identity-verifier:e2e miv self-test
+7. miv reports inspect --report-dir .miv/reports --glob "*v013-smoke.json"
+8. miv reports gate --report-dir .miv/reports --release v0.1.3
+
+In sanitized bundles without .git, scripts/e2e_local.sh skips only the git-ignore check.
+Manual/browser mode is not live provider validation.
 EOF
 
 git log --format='%an <%ae> | %cn <%ce> | %h %s' --all >"$BUNDLE_DIR/git-authorship-summary.md"

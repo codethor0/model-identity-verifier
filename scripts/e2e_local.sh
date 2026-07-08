@@ -58,12 +58,16 @@ else
   failures=$((failures + 1))
 fi
 
-if git check-ignore -q .miv/reports/e2e-manual-fixture.json 2>/dev/null; then
-  echo "==> reports ignored by git"
-  echo "    ok"
+echo "==> reports ignored by git"
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if git check-ignore -q .miv/reports/e2e-manual-fixture.json 2>/dev/null; then
+    echo "    ok"
+  else
+    echo "    FAILED: .miv/reports not ignored" >&2
+    failures=$((failures + 1))
+  fi
 else
-  echo "    FAILED: .miv/reports not ignored" >&2
-  failures=$((failures + 1))
+  echo "    skip: git ignore check requires a git working tree"
 fi
 
 if [ "$failures" -eq 0 ]; then

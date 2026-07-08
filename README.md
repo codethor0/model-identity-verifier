@@ -138,7 +138,7 @@ Manual prompt packs:
 | `standard` | 33 | Routine integrity audit |
 | `deep` | 57 | Rigorous adversarial benchmark |
 
-Paste `miv prompt browser` output into ChatGPT web, then assess the labeled `[probe-id]` responses.
+Paste `miv prompt browser` output into ChatGPT web, then assess the labeled actual probe-id responses.
 Manual mode does not count as live provider verification and cannot verify route metadata.
 
 Free-form assessment (no `--pack-mode`) analyzes one pasted response without prompt-pack alignment.
