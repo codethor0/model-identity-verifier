@@ -42,6 +42,17 @@ miv verify --dry-run
 4. Ensure all quality checks pass
 5. Submit a pull request with a clear description
 
+## Branch strategy
+
+This project uses trunk-based development.
+
+- `main` is the only long-lived branch.
+- Use short-lived `feature/<name>` or `fix/<name>` branches for focused work.
+- Delete branches after merge.
+- Use signed tags for releases.
+- Do not keep stale experiment branches in the public repository.
+- Do not force-push `main`.
+
 ## Probes
 
 New probes must include: id, prompt, language, category, subcategory, expected_behavior, severity, tags, and notes. Probe IDs must be unique.
