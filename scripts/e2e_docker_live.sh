@@ -113,7 +113,7 @@ run_live() {
 }
 
 run_live openai gpt-4o-mini chatgpt openai-v013-smoke.json
-run_live anthropic claude-3-5-sonnet-20241022 claude anthropic-v013-smoke.json
+run_live anthropic claude-sonnet-4-6 claude anthropic-v013-smoke.json
 run_live openrouter openai/gpt-4o-mini chatgpt openrouter-v013-smoke.json "--route-check"
 
 if [ "$live_ran" -gt 0 ]; then

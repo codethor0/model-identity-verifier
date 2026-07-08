@@ -80,6 +80,7 @@ IDENTITY_ALIASES: dict[str, str] = {
 MODEL_NAME_ALIASES: dict[str, list[str]] = {
     "gpt-4o-mini": ["gpt-4o", "gpt-4o-mini", "gpt-4"],
     "gpt-4o": ["gpt-4o", "gpt-4o-mini", "gpt-4"],
+    "claude-sonnet-4-6": ["claude-sonnet-4-6", "claude-sonnet-4", "claude-3-5-sonnet"],
     "claude-3-5-sonnet-20241022": ["claude-3-5-sonnet", "claude-3-5-sonnet-20241022"],
 }
 

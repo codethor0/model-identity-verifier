@@ -48,7 +48,7 @@ mkdir -p .miv/reports
 miv verify --provider openai --model gpt-4o-mini --expected-identity chatgpt \
   --quick --format json --save .miv/reports/openai-v013-smoke.json
 
-miv verify --provider anthropic --model claude-3-5-sonnet-20241022 --expected-identity claude \
+miv verify --provider anthropic --model claude-sonnet-4-6 --expected-identity claude \
   --quick --format json --save .miv/reports/anthropic-v013-smoke.json
 
 miv verify --provider openrouter --model openai/gpt-4o-mini --expected-identity chatgpt \
