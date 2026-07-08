@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 from model_identity_verifier.models.enums import (
+    ClaimType,
     DowngradeStatus,
     DriftStatus,
     ExpectedBehavior,
@@ -16,8 +17,15 @@ from model_identity_verifier.models.enums import (
     ProbeOutcome,
     ProbeSeverity,
     RiskLevel,
+    RouteMatchType,
     VerificationStatus,
 )
+
+SCHEMA_VERSION = "1.0"
+DETECTOR_VERSION = "1.0"
+SCORING_VERSION = "1.0"
+PROBE_SET_VERSION = "builtin-1"
+REDACTION_MODE = "standard"
 
 
 class Probe(BaseModel):
@@ -48,8 +56,17 @@ class RouteMetadata(BaseModel):
     upstream_provider: str | None = None
     fallback_model: str | None = None
     router_name: str | None = None
+    system_fingerprint: str | None = None
+    response_id: str | None = None
+    finish_reason: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
     metadata_available: bool = False
+    metadata_opaque: bool = False
+    metadata_confidence: float | None = None
     metadata_mismatch: bool = False
+    match_type: RouteMatchType | None = None
     mismatch_details: list[str] = Field(default_factory=list)
 
 
@@ -64,9 +81,22 @@ class ProviderResponse(BaseModel):
     error: str | None = None
 
 
+class DetectedClaim(BaseModel):
+    identity: str
+    canonical_identity: str
+    claim_type: ClaimType
+    confidence: float = Field(ge=0.0, le=1.0)
+    start: int | None = None
+    end: int | None = None
+    evidence: str
+    language: str | None = None
+
+
 class IdentityDetection(BaseModel):
     classification: IdentityClassification
     detected_identities: list[str] = Field(default_factory=list)
+    claims: list[DetectedClaim] = Field(default_factory=list)
+    primary_identity: str | None = None
     confidence: float = 0.0
     explanation: str = ""
 
@@ -99,6 +129,16 @@ class ReportMetrics(BaseModel):
     average_response_length: float = 0.0
 
 
+class ScoreFinding(BaseModel):
+    id: str
+    severity: str
+    penalty: int = 0
+    probe_id: str | None = None
+    reason: str
+    evidence: str | None = None
+    confidence: float | None = None
+
+
 class VerificationReport(BaseModel):
     tool_version: str
     session_id: str
@@ -116,8 +156,14 @@ class VerificationReport(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     probe_results: list[ProbeResult] = Field(default_factory=list)
+    score_findings: list[ScoreFinding] = Field(default_factory=list)
     report_hash: str = ""
     dry_run: bool = False
+    schema_version: str = SCHEMA_VERSION
+    detector_version: str = DETECTOR_VERSION
+    scoring_version: str = SCORING_VERSION
+    probe_set_version: str = PROBE_SET_VERSION
+    redaction_mode: str = REDACTION_MODE
 
     @staticmethod
     def now_timestamp() -> str:
@@ -140,6 +186,10 @@ class Baseline(BaseModel):
     route_pattern: RouteMetadata | None = None
     report_hash: str
     baseline_id: str = ""
+    schema_version: str = SCHEMA_VERSION
+    probe_set_version: str = PROBE_SET_VERSION
+    detector_version: str = DETECTOR_VERSION
+    scoring_version: str = SCORING_VERSION
 
 
 class DriftResult(BaseModel):

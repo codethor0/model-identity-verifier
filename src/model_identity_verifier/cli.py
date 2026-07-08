@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -59,6 +61,13 @@ def cmd_version(_args: argparse.Namespace) -> int:
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
+    if args.output and args.save:
+        print("Error: --output and --save cannot be used together", file=sys.stderr)
+        return EXIT_ERROR
+
+    output_path = args.output or args.save
+    mode = "quick" if args.quick else args.mode
+
     try:
         provider_kwargs: dict[str, object] = {"api_key": args.api_key}
         if args.provider == "mock":
@@ -74,14 +83,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
         provider,
         args.model,
         args.expected_identity,
-        mode=args.mode,
+        mode=mode,
         dry_run=args.dry_run,
         route_check=args.route_check,
         downgrade_check=args.downgrade_check,
     )
 
-    if args.output:
-        output_path = Path(args.output)
+    if output_path:
+        output_path = Path(output_path)
         suffix = output_path.suffix.lower()
         if suffix == ".json" or args.format == "json":
             save_json_report(report, output_path)
@@ -92,13 +101,13 @@ def cmd_verify(args: argparse.Namespace) -> int:
         else:
             save_json_report(report, output_path)
 
-    if args.format == "json" and not args.output:
+    if args.format == "json" and not output_path:
         print(json.dumps(report.model_dump(mode="json"), indent=2))
-    elif args.format == "markdown" and not args.output:
+    elif args.format == "markdown" and not output_path:
         from model_identity_verifier.reports.markdown_report import render_markdown_report
 
         print(render_markdown_report(report))
-    elif args.format == "sarif" and not args.output:
+    elif args.format == "sarif" and not output_path:
         from model_identity_verifier.reports.sarif_report import render_sarif_report
 
         print(render_sarif_report(report))
@@ -134,6 +143,10 @@ def cmd_self_test(_args: argparse.Namespace) -> int:
     )
     if not dry_report.dry_run:
         errors.append("Dry run flag not set")
+    if dry_report.verification_status != VerificationStatus.INCONCLUSIVE:
+        errors.append("Dry run must produce INCONCLUSIVE status")
+    if dry_report.confidence_score == 100:
+        errors.append("Dry run must not report score 100")
 
     if errors:
         print("Self-test FAILED:", file=sys.stderr)
@@ -166,6 +179,55 @@ def cmd_probes_show(args: argparse.Namespace) -> int:
 def cmd_providers_list(_args: argparse.Namespace) -> int:
     for info in list_providers():
         print(f"{info['name']:12} env_key={info['env_key']}")
+    return EXIT_SUCCESS
+
+
+def _run_self_test_checks() -> list[str]:
+    errors: list[str] = []
+    errors.extend(validate_registry())
+    provider = get_provider("mock", expected_identity="claude")
+    report = run_verification(provider, "mock-model", "claude", mode="quick", dry_run=False)
+    if report.metrics.total_probes == 0:
+        errors.append("No probes executed in self-test")
+    return errors
+
+
+def cmd_doctor(_args: argparse.Namespace) -> int:
+    print(f"Python: {sys.version.split()[0]}")
+    print(f"Package: model-identity-verifier {__version__}")
+
+    for info in list_providers():
+        env_key = info["env_key"]
+        if env_key == "(none)":
+            print(f"Provider {info['name']}: no API key required")
+        else:
+            present = "set" if os.environ.get(env_key) else "not set"
+            print(f"Provider {info['name']}: {env_key} {present}")
+
+    optional = ["openai", "anthropic", "google.generativeai"]
+    for module in optional:
+        available = importlib.util.find_spec(module.split(".")[0]) is not None
+        print(f"Optional dependency {module}: {'available' if available else 'not installed'}")
+
+    reports_dir = Path(".miv/reports")
+    try:
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        test_file = reports_dir / ".write_test"
+        test_file.write_text("ok", encoding="utf-8")
+        test_file.unlink()
+        print(f"Report directory {reports_dir}: writable")
+    except OSError as exc:
+        print(f"Report directory {reports_dir}: not writable ({exc})")
+        return EXIT_ERROR
+
+    errors = _run_self_test_checks()
+    if errors:
+        print("Self-test issues:", file=sys.stderr)
+        for error in errors:
+            print(f"  - {error}", file=sys.stderr)
+        return EXIT_ERROR
+
+    print("Self-test: passed (no network)")
     return EXIT_SUCCESS
 
 
@@ -245,6 +307,8 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--api-key", default=None, help="API key (prefer env vars)")
     verify_modes = ["quick", "stress", "deep", "route", "downgrade"]
     verify_parser.add_argument("--mode", default="quick", choices=verify_modes)
+    verify_parser.add_argument("--quick", action="store_true", help="Alias for --mode quick")
+    verify_parser.add_argument("--save", default=None, help="Alias for --output (report file path)")
     verify_parser.add_argument(
         "--dry-run", action="store_true", help="Plan probes without API calls"
     )
@@ -262,6 +326,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     self_test_parser = subparsers.add_parser("self-test", help="Run internal self-test")
     self_test_parser.set_defaults(func=cmd_self_test)
+
+    doctor_parser = subparsers.add_parser("doctor", help="Check local environment")
+    doctor_parser.set_defaults(func=cmd_doctor)
 
     probes_parser = subparsers.add_parser("probes", help="Probe management")
     probes_sub = probes_parser.add_subparsers(dest="probes_command", required=True)

@@ -21,6 +21,18 @@ This tool cannot prove which model generated an output unless the provider expos
 - Guaranteed detection of all downgrades
 - Provider truth when metadata is absent or opaque
 
+## Interpreting PASS
+
+PASS means the observed responses and available metadata did not trigger configured warning/failure thresholds during this run.
+
+PASS does not prove the provider served the claimed model.
+
+## Dry run
+
+Dry run shows what would be executed. It does not verify model identity and must be treated as INCONCLUSIVE.
+
+Dry run produces status INCONCLUSIVE, score N/A, and finding `dry_run.no_verification`. No provider calls are made.
+
 ## Installation
 
 ```bash
@@ -30,7 +42,7 @@ pip install model-identity-verifier
 Development install:
 
 ```bash
-git clone https://github.com/model-identity-verifier/model-identity-verifier.git
+git clone https://github.com/codethor0/model-identity-verifier.git
 cd model-identity-verifier
 pip install -e ".[dev]"
 ```
@@ -53,7 +65,15 @@ Verify with a live provider (requires API key):
 
 ```bash
 export OPENAI_API_KEY=your-key
-miv verify --provider openai --model gpt-4o --expected-identity chatgpt
+miv verify --provider openai --model gpt-4o-mini --expected-identity chatgpt --mode quick
+```
+
+Route check with OpenRouter:
+
+```bash
+export OPENROUTER_API_KEY=your-key
+miv verify --provider openrouter --model openai/gpt-4o-mini --expected-identity chatgpt \
+  --route-check --mode quick --format json -o report.json
 ```
 
 ## Commands
@@ -62,6 +82,7 @@ miv verify --provider openai --model gpt-4o --expected-identity chatgpt
 | --- | --- |
 | `miv verify` | Run identity verification probes |
 | `miv self-test` | Run internal self-test (no network) |
+| `miv doctor` | Check local environment (no network) |
 | `miv probes list` | List available probes |
 | `miv probes show <id>` | Show probe details |
 | `miv providers list` | List supported providers |
@@ -78,27 +99,39 @@ miv verify \
   --model mock-model \
   --expected-identity claude \
   --mode quick \
+  --quick \
   --dry-run \
   --format terminal \
   --output report.json
 ```
 
+`--quick` is an alias for `--mode quick`. `--save` is an alias for `--output`.
+
 Modes: `quick`, `stress`, `deep`, `route`, `downgrade`
 
 Output formats: `terminal`, `json`, `markdown`, `sarif`
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | PASS |
+| 1 | WARN, INCONCLUSIVE, or DOWNGRADE_SUSPECTED |
+| 2 | FAIL, HIJACK, or ROUTE_MISMATCH |
+| 3 | ERROR |
 
 ## Interpreting results
 
 | Status | Meaning |
 | --- | --- |
-| PASS | Score >= 80, no critical failures |
+| PASS | Thresholds not exceeded during this run (does not prove model identity) |
 | WARN | Score >= 60 with warnings |
 | FAIL | Score < 60 or repeated identity mismatch |
 | HIJACK | Confirmed identity hijack under stress |
 | ROUTE_MISMATCH | Metadata conflicts with requested model |
 | DOWNGRADE_SUSPECTED | Heuristic downgrade indicators |
 | ERROR | Verification could not run |
-| INCONCLUSIVE | Insufficient evidence |
+| INCONCLUSIVE | Dry run, all probes skipped, or insufficient evidence |
 
 ## Providers
 
@@ -111,7 +144,19 @@ Output formats: `terminal`, `json`, `markdown`, `sarif`
 | gemini | GOOGLE_API_KEY |
 | openrouter | OPENROUTER_API_KEY |
 
-Optional SDK dependencies: `pip install model-identity-verifier[openai,anthropic,google]`
+Prefer environment variables over `--api-key`. Provider metadata availability varies; route metadata may be unavailable or opaque.
+
+## Baseline example
+
+```bash
+miv verify --provider mock --format json -o run.json
+miv baseline create --report run.json --output baseline.json
+miv baseline check --baseline baseline.json --report run.json
+```
+
+## Safe report sharing
+
+Reports may contain model response text. Redact before sharing. JSON reports include `score_findings` for audit trails. Do not share reports that may contain API keys or private prompts.
 
 ## Development
 
@@ -121,6 +166,7 @@ ruff format --check .
 python -m pytest
 python -m build
 miv self-test
+miv doctor
 ```
 
 ## Security

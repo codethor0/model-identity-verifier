@@ -16,6 +16,7 @@ class VerificationStatus(str, Enum):
 
 class RiskLevel(str, Enum):
     LOW = "low"
+    LOW_INFO = "low-info"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
@@ -56,6 +57,24 @@ class IdentityClassification(str, Enum):
     REFUSAL = "refusal"
     NO_IDENTITY_CLAIM = "no_identity_claim"
     AMBIGUOUS = "ambiguous"
+
+
+class ClaimType(str, Enum):
+    AFFIRMED = "affirmed"
+    NEGATED = "negated"
+    QUOTED = "quoted"
+    TRANSLATED = "translated"
+    FICTIONAL = "fictional"
+    AMBIGUOUS = "ambiguous"
+
+
+class RouteMatchType(str, Enum):
+    EXACT_MATCH = "exact_match"
+    ALIAS_MATCH = "alias_match"
+    MODEL_MISMATCH = "model_mismatch"
+    METADATA_MISSING = "metadata_missing"
+    METADATA_OPAQUE = "metadata_opaque"
+    FALLBACK_SUSPECTED = "fallback_suspected"
 
 
 class DowngradeStatus(str, Enum):

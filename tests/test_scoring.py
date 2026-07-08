@@ -1,13 +1,21 @@
 """Tests for scoring engine."""
 
 from model_identity_verifier.models.enums import (
+    DowngradeStatus,
     IdentityClassification,
     ProbeCategory,
     ProbeOutcome,
+    RiskLevel,
     VerificationStatus,
 )
-from model_identity_verifier.models.schemas import IdentityDetection, ProbeResult
-from model_identity_verifier.scoring.engine import compute_score, determine_status
+from model_identity_verifier.models.schemas import (
+    IdentityDetection,
+    ProbeResult,
+    ReportMetrics,
+    RouteMetadata,
+    VerificationReport,
+)
+from model_identity_verifier.scoring.engine import compute_score, determine_status, score_report
 
 
 def _fail_result(probe_id: str, category: ProbeCategory) -> ProbeResult:
@@ -30,8 +38,9 @@ def test_scoring_pass() -> None:
             outcome=ProbeOutcome.PASS,
         )
     ]
-    score, _, hijack, false_count = compute_score(results)
+    score, _, findings, hijack, false_count = compute_score(results)
     assert score == 100
+    assert not findings
     status = determine_status(
         score,
         hijack_confirmed=hijack,
@@ -39,9 +48,8 @@ def test_scoring_pass() -> None:
         false_identity_count=false_count,
         error_count=0,
         total_probes=1,
-        downgrade_status=__import__(
-            "model_identity_verifier.models.enums", fromlist=["DowngradeStatus"]
-        ).DowngradeStatus.NONE,
+        skipped_count=0,
+        downgrade_status=DowngradeStatus.NONE,
     )
     assert status == VerificationStatus.PASS
 
@@ -51,9 +59,11 @@ def test_scoring_fail_on_repeated_false_identity() -> None:
         _fail_result("t1", ProbeCategory.BASE),
         _fail_result("t2", ProbeCategory.MULTILINGUAL),
     ]
-    score, warnings, hijack, false_count = compute_score(results)
+    score, warnings, findings, hijack, false_count = compute_score(results)
     assert score < 60
     assert false_count >= 2
+    assert findings
+    assert any(f.id == "identity.false_claim" for f in findings)
     status = determine_status(
         score,
         hijack_confirmed=hijack,
@@ -61,9 +71,141 @@ def test_scoring_fail_on_repeated_false_identity() -> None:
         false_identity_count=false_count,
         error_count=0,
         total_probes=2,
-        downgrade_status=__import__(
-            "model_identity_verifier.models.enums", fromlist=["DowngradeStatus"]
-        ).DowngradeStatus.NONE,
+        skipped_count=0,
+        downgrade_status=DowngradeStatus.NONE,
     )
     assert status == VerificationStatus.FAIL
     assert warnings
+
+
+def test_dry_run_finding() -> None:
+    report = VerificationReport(
+        tool_version="0.1.1",
+        session_id="s",
+        timestamp="t",
+        provider="mock",
+        requested_model="m",
+        expected_identity="claude",
+        verification_status=VerificationStatus.INCONCLUSIVE,
+        confidence_score=0,
+        risk_level=RiskLevel.LOW_INFO,
+        metrics=ReportMetrics(total_probes=2, skipped_probes=2),
+        probe_results=[],
+        dry_run=True,
+    )
+    scored = score_report(report)
+    assert scored.verification_status == VerificationStatus.INCONCLUSIVE
+    assert scored.confidence_score == 0
+    assert any(f.id == "dry_run.no_verification" for f in scored.score_findings)
+
+
+def test_route_metadata_missing_finding() -> None:
+    report = VerificationReport(
+        tool_version="0.1.1",
+        session_id="s",
+        timestamp="t",
+        provider="mock",
+        requested_model="m",
+        expected_identity="claude",
+        verification_status=VerificationStatus.PASS,
+        confidence_score=100,
+        risk_level=RiskLevel.LOW,
+        route_metadata=RouteMetadata(metadata_available=False),
+        metrics=ReportMetrics(total_probes=1, passed_probes=1),
+        probe_results=[
+            ProbeResult(
+                probe_id="t1",
+                probe_category=ProbeCategory.BASE,
+                outcome=ProbeOutcome.PASS,
+            )
+        ],
+    )
+    scored = score_report(report)
+    assert any(f.id == "route.metadata_missing" for f in scored.score_findings)
+
+
+def test_route_metadata_mismatch_finding() -> None:
+    report = VerificationReport(
+        tool_version="0.1.1",
+        session_id="s",
+        timestamp="t",
+        provider="mock",
+        requested_model="gpt-4o",
+        expected_identity="chatgpt",
+        verification_status=VerificationStatus.PASS,
+        confidence_score=100,
+        risk_level=RiskLevel.LOW,
+        route_metadata=RouteMetadata(
+            metadata_available=True,
+            metadata_mismatch=True,
+            returned_model="other-model",
+        ),
+        metrics=ReportMetrics(total_probes=1, passed_probes=1),
+        probe_results=[
+            ProbeResult(
+                probe_id="t1",
+                probe_category=ProbeCategory.BASE,
+                outcome=ProbeOutcome.PASS,
+            )
+        ],
+    )
+    scored = score_report(report)
+    assert any(f.id == "route.metadata_mismatch" for f in scored.score_findings)
+
+
+def test_high_refusal_rate_finding() -> None:
+    results = [
+        ProbeResult(
+            probe_id=f"t{i}",
+            probe_category=ProbeCategory.BASE,
+            outcome=ProbeOutcome.WARN,
+            detection=IdentityDetection(
+                classification=IdentityClassification.REFUSAL,
+            ),
+        )
+        for i in range(3)
+    ]
+    score, _, findings, _, _ = compute_score(results)
+    assert score < 100
+    assert any(f.id == "identity.refusal_rate_high" for f in findings)
+
+
+def test_high_evasion_rate_finding() -> None:
+    results = [
+        ProbeResult(
+            probe_id=f"t{i}",
+            probe_category=ProbeCategory.BASE,
+            outcome=ProbeOutcome.WARN,
+            detection=IdentityDetection(
+                classification=IdentityClassification.NO_IDENTITY_CLAIM,
+            ),
+        )
+        for i in range(3)
+    ]
+    _score, _, findings, _, _ = compute_score(results)
+    assert any(f.id == "identity.evasion_rate_high" for f in findings)
+
+
+def test_downgrade_suspected_finding() -> None:
+    report = VerificationReport(
+        tool_version="0.1.1",
+        session_id="s",
+        timestamp="t",
+        provider="mock",
+        requested_model="m",
+        expected_identity="claude",
+        verification_status=VerificationStatus.PASS,
+        confidence_score=100,
+        risk_level=RiskLevel.LOW,
+        downgrade_status=DowngradeStatus.SUSPECTED,
+        metrics=ReportMetrics(total_probes=1, passed_probes=1),
+        probe_results=[
+            ProbeResult(
+                probe_id="t1",
+                probe_category=ProbeCategory.BASE,
+                outcome=ProbeOutcome.PASS,
+            )
+        ],
+    )
+    scored = score_report(report)
+    assert any(f.id == "downgrade.identity_instability" for f in scored.score_findings)

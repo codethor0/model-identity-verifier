@@ -19,12 +19,40 @@ _LEVEL_MAP = {
     VerificationStatus.INCONCLUSIVE: "note",
 }
 
+_SEVERITY_MAP = {
+    "info": "note",
+    "low": "note",
+    "medium": "warning",
+    "high": "error",
+    "critical": "error",
+}
+
 
 def render_sarif_report(report: VerificationReport) -> str:
-    results = []
+    rule_ids: set[str] = set()
+    results: list[dict[str, object]] = []
+
+    for finding in report.score_findings:
+        rule_ids.add(finding.id)
+        results.append(
+            {
+                "ruleId": finding.id,
+                "level": _SEVERITY_MAP.get(finding.severity, "warning"),
+                "message": {"text": finding.reason},
+                "properties": {
+                    "penalty": finding.penalty,
+                    "probe_id": finding.probe_id,
+                    "provider": report.provider,
+                    "requested_model": report.requested_model,
+                    "expected_identity": report.expected_identity,
+                },
+            }
+        )
+
     for probe_result in report.probe_results:
         if probe_result.outcome.value in ("PASS", "SKIP"):
             continue
+        rule_ids.add(probe_result.probe_id)
         level = "warning" if probe_result.outcome.value == "WARN" else "error"
         results.append(
             {
@@ -37,11 +65,15 @@ def render_sarif_report(report: VerificationReport) -> str:
                 },
                 "properties": {
                     "category": probe_result.probe_category.value,
+                    "provider": report.provider,
+                    "requested_model": report.requested_model,
+                    "expected_identity": report.expected_identity,
                 },
             }
         )
 
     if report.verification_status != VerificationStatus.PASS:
+        rule_ids.add("verification-status")
         results.append(
             {
                 "ruleId": "verification-status",
@@ -52,8 +84,22 @@ def render_sarif_report(report: VerificationReport) -> str:
                         f"(score: {report.confidence_score})"
                     ),
                 },
+                "properties": {
+                    "provider": report.provider,
+                    "requested_model": report.requested_model,
+                    "expected_identity": report.expected_identity,
+                    "dry_run": report.dry_run,
+                },
             }
         )
+
+    rules = [
+        {
+            "id": rule_id,
+            "shortDescription": {"text": rule_id},
+        }
+        for rule_id in sorted(rule_ids)
+    ]
 
     sarif = {
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
@@ -64,7 +110,8 @@ def render_sarif_report(report: VerificationReport) -> str:
                     "driver": {
                         "name": "model-identity-verifier",
                         "version": report.tool_version,
-                        "informationUri": "https://github.com/model-identity-verifier/model-identity-verifier",
+                        "informationUri": "https://github.com/codethor0/model-identity-verifier",
+                        "rules": rules,
                     },
                 },
                 "results": results,

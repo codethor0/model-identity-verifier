@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "model-identity-verifier"
-version = "0.1.0"
+version = "0.1.1"
 description = "CLI tool to detect suspicious model self-identification behavior"
 readme = "README.md"
 license = "MIT"
@@ -78,6 +78,8 @@ ignore = ["T201"]
 "src/model_identity_verifier/reports/terminal.py" = ["T201"]
 "src/model_identity_verifier/probes/registry.py" = ["RUF001"]
 "src/model_identity_verifier/providers/base.py" = ["ARG002"]
+"src/model_identity_verifier/analysis/detector.py" = ["RUF001"]
+"src/model_identity_verifier/analysis/patterns.py" = ["RUF001"]
 
 [tool.mypy]
 python_version = "3.10"

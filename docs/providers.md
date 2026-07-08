@@ -11,6 +11,12 @@
 | gemini | Google Generative Language | GOOGLE_API_KEY |
 | openrouter | OpenRouter OpenAI-compatible | OPENROUTER_API_KEY |
 
+## API key safety
+
+- Environment variables are recommended.
+- CLI `--api-key` is supported but less safe (may appear in shell history).
+- Keys are redacted from errors and stored metadata.
+
 ## Optional dependencies
 
 Provider SDKs are optional. The tool uses `httpx` for HTTP calls by default.
@@ -28,8 +34,13 @@ OpenRouter and similar proxy providers may return upstream metadata. The tool re
 - Requested model
 - Returned model metadata
 - Upstream provider (when available)
+- Match type: exact, alias, mismatch, missing, or opaque
 
-Opaque routing without metadata produces warnings, not proof of misrouting.
+Router metadata is heuristic unless explicit fields are supplied. Opaque routing without metadata produces warnings, not proof of misrouting.
+
+## Metadata availability
+
+Provider metadata availability varies by API and model. Missing metadata is reported as `route.metadata_missing`, not as a confirmed mismatch.
 
 ## Error handling
 

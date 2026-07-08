@@ -36,6 +36,7 @@ from model_identity_verifier.scoring.engine import compute_metrics, score_report
 from model_identity_verifier.utils.helpers import (
     compute_report_hash,
     generate_session_id,
+    redact_dict_secrets,
     redact_secrets,
 )
 
@@ -229,9 +230,8 @@ def run_verification(
             if response.route_metadata and route_metadata is None:
                 route_metadata = response.route_metadata
             if response.raw_metadata:
-                response_metadata.update(
-                    {k: v for k, v in response.raw_metadata.items() if k != "choices"}
-                )
+                redacted = redact_dict_secrets(response.raw_metadata)
+                response_metadata.update({k: v for k, v in redacted.items() if k != "choices"})
             result = evaluate_probe_result(probe, response, expected_identity)
             results.append(result)
         except ProviderError as exc:

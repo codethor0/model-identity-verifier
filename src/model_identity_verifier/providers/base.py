@@ -9,8 +9,10 @@ from typing import Any, ClassVar
 
 import httpx
 
+from model_identity_verifier.analysis.patterns import MODEL_NAME_ALIASES
+from model_identity_verifier.models.enums import RouteMatchType
 from model_identity_verifier.models.schemas import ProviderResponse, RouteMetadata
-from model_identity_verifier.utils.helpers import redact_secrets
+from model_identity_verifier.utils.helpers import redact_dict_secrets, redact_secrets
 
 
 class ProviderError(Exception):
@@ -54,6 +56,15 @@ class BaseProvider(ABC):
     @abstractmethod
     def complete(self, prompt: str, model: str, **kwargs: Any) -> ProviderResponse: ...
 
+    def _models_match(self, requested: str, returned: str) -> RouteMatchType:
+        if requested == returned:
+            return RouteMatchType.EXACT_MATCH
+        requested_aliases = MODEL_NAME_ALIASES.get(requested, [requested])
+        returned_aliases = MODEL_NAME_ALIASES.get(returned, [returned])
+        if set(requested_aliases) & set(returned_aliases):
+            return RouteMatchType.ALIAS_MATCH
+        return RouteMatchType.MODEL_MISMATCH
+
     def normalize_route_metadata(
         self,
         requested_model: str,
@@ -62,18 +73,72 @@ class BaseProvider(ABC):
     ) -> RouteMetadata:
         mismatch = False
         details: list[str] = []
-        if response_model and response_model != requested_model:
-            mismatch = True
-            details.append(
-                f"Requested model '{requested_model}' but metadata reports '{response_model}'"
-            )
+        match_type: RouteMatchType | None = None
+        metadata_available = response_model is not None
+        metadata_opaque = False
+        metadata_confidence: float | None = None
+
+        fallback_model = raw.get("fallback_model") or raw.get("fallback")
+        upstream = raw.get("provider") or raw.get("upstream_provider")
+        system_fingerprint = raw.get("system_fingerprint")
+        response_id = raw.get("id")
+        finish_reason = None
+        choices = raw.get("choices")
+        if isinstance(choices, list) and choices:
+            finish_reason = choices[0].get("finish_reason")
+        usage = raw.get("usage") or {}
+        input_tokens = usage.get("prompt_tokens") or usage.get("input_tokens")
+        output_tokens = usage.get("completion_tokens") or usage.get("output_tokens")
+        total_tokens = usage.get("total_tokens")
+
+        if not metadata_available:
+            match_type = RouteMatchType.METADATA_MISSING
+            details.append("Route metadata unavailable")
+            metadata_confidence = 0.0
+        elif response_model:
+            match_type = self._models_match(requested_model, response_model)
+            if match_type == RouteMatchType.MODEL_MISMATCH:
+                mismatch = True
+                details.append(
+                    f"Returned model '{response_model}' differs from requested '{requested_model}'"
+                )
+            elif match_type == RouteMatchType.ALIAS_MATCH:
+                details.append(
+                    f"Returned model '{response_model}' is an alias of "
+                    f"requested '{requested_model}'"
+                )
+                metadata_confidence = 0.8
+            else:
+                metadata_confidence = 1.0
+
+        if fallback_model:
+            match_type = RouteMatchType.FALLBACK_SUSPECTED
+            details.append(f"Fallback model reported: {fallback_model}")
+
+        if metadata_available and not response_model and not mismatch:
+            metadata_opaque = True
+            match_type = RouteMatchType.METADATA_OPAQUE
+            details.append("Route metadata opaque")
+            metadata_confidence = 0.3
+
         return RouteMetadata(
             requested_provider=self.name,
             requested_model=requested_model,
             returned_provider=self.name,
             returned_model=response_model,
-            metadata_available=response_model is not None,
+            upstream_provider=str(upstream) if upstream else None,
+            fallback_model=str(fallback_model) if fallback_model else None,
+            system_fingerprint=str(system_fingerprint) if system_fingerprint else None,
+            response_id=str(response_id) if response_id else None,
+            finish_reason=str(finish_reason) if finish_reason else None,
+            input_tokens=int(input_tokens) if input_tokens is not None else None,
+            output_tokens=int(output_tokens) if output_tokens is not None else None,
+            total_tokens=int(total_tokens) if total_tokens is not None else None,
+            metadata_available=metadata_available,
+            metadata_opaque=metadata_opaque,
+            metadata_confidence=metadata_confidence,
             metadata_mismatch=mismatch,
+            match_type=match_type,
             mismatch_details=details,
         )
 
@@ -173,7 +238,7 @@ class OpenAICompatibleProvider(BaseProvider):
             model=returned_model,
             provider=self.name,
             latency_ms=latency,
-            raw_metadata=data,
+            raw_metadata=redact_dict_secrets(data),
             route_metadata=self.normalize_route_metadata(model, returned_model, data),
         )
 
@@ -217,7 +282,7 @@ class AnthropicProvider(BaseProvider):
             model=returned_model,
             provider=self.name,
             latency_ms=latency,
-            raw_metadata=data,
+            raw_metadata=redact_dict_secrets(data),
             route_metadata=self.normalize_route_metadata(model, returned_model, data),
         )
 
@@ -259,7 +324,7 @@ class GeminiProvider(BaseProvider):
             model=returned_model,
             provider=self.name,
             latency_ms=latency,
-            raw_metadata=data,
+            raw_metadata=redact_dict_secrets(data),
             route_metadata=self.normalize_route_metadata(model, returned_model, data),
         )
 

@@ -31,9 +31,11 @@ Never commit `.env`.
 | route | base + route metadata probes |
 | downgrade | base + capability sanity probes |
 
+`--quick` is an alias for `--mode quick`.
+
 ## Output
 
 Use `--format json|markdown|sarif` for machine-readable output.
-Use `-o path` to save reports to disk.
+Use `-o path` or `--save path` to write reports to the exact path specified.
 
-Reports are also written to `.miv/reports/` when using `--output` with a relative path.
+Reports are written to the path you provide. The tool does not rewrite relative paths to `.miv/reports/` automatically.

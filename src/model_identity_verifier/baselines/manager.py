@@ -6,8 +6,16 @@ import json
 from pathlib import Path
 
 from model_identity_verifier import __version__
-from model_identity_verifier.models.enums import DriftStatus
-from model_identity_verifier.models.schemas import Baseline, DriftResult, VerificationReport
+from model_identity_verifier.models.enums import DriftStatus, ProbeOutcome
+from model_identity_verifier.models.schemas import (
+    DETECTOR_VERSION,
+    PROBE_SET_VERSION,
+    SCHEMA_VERSION,
+    SCORING_VERSION,
+    Baseline,
+    DriftResult,
+    VerificationReport,
+)
 
 
 def baseline_from_report(report: VerificationReport, baseline_id: str = "") -> Baseline:
@@ -15,6 +23,8 @@ def baseline_from_report(report: VerificationReport, baseline_id: str = "") -> B
     for result in report.probe_results:
         if result.detection and result.detection.detected_identities:
             phrasing.extend(result.detection.detected_identities)
+        if result.detection and result.detection.primary_identity:
+            phrasing.append(result.detection.primary_identity)
 
     return Baseline(
         tool_version=__version__,
@@ -32,6 +42,10 @@ def baseline_from_report(report: VerificationReport, baseline_id: str = "") -> B
         route_pattern=report.route_metadata,
         report_hash=report.report_hash,
         baseline_id=baseline_id or report.session_id,
+        schema_version=SCHEMA_VERSION,
+        probe_set_version=PROBE_SET_VERSION,
+        detector_version=DETECTOR_VERSION,
+        scoring_version=SCORING_VERSION,
     )
 
 
@@ -108,10 +122,27 @@ def compare_reports(
     report_a: VerificationReport,
     report_b: VerificationReport,
 ) -> dict[str, object]:
+    failed_a = {r.probe_id for r in report_a.probe_results if r.outcome == ProbeOutcome.FAIL}
+    failed_b = {r.probe_id for r in report_b.probe_results if r.outcome == ProbeOutcome.FAIL}
+    outcomes_a = {r.probe_id: r.outcome.value for r in report_a.probe_results}
+    outcomes_b = {r.probe_id: r.outcome.value for r in report_b.probe_results}
+    changed_probes = {
+        probe_id: {"before": outcomes_a[probe_id], "after": outcomes_b[probe_id]}
+        for probe_id in outcomes_a
+        if probe_id in outcomes_b and outcomes_a[probe_id] != outcomes_b[probe_id]
+    }
+
+    route_a = report_a.route_metadata.returned_model if report_a.route_metadata else None
+    route_b = report_b.route_metadata.returned_model if report_b.route_metadata else None
+
     return {
+        "status_changed": report_a.verification_status.value != report_b.verification_status.value,
         "report_a_status": report_a.verification_status.value,
         "report_b_status": report_b.verification_status.value,
         "score_delta": report_b.confidence_score - report_a.confidence_score,
+        "risk_changed": report_a.risk_level.value != report_b.risk_level.value,
+        "report_a_risk": report_a.risk_level.value,
+        "report_b_risk": report_b.risk_level.value,
         "identity_match_rate_delta": (
             report_b.metrics.identity_match_rate - report_a.metrics.identity_match_rate
         ),
@@ -120,4 +151,10 @@ def compare_reports(
         ),
         "provider_changed": report_a.provider != report_b.provider,
         "model_changed": report_a.requested_model != report_b.requested_model,
+        "returned_model_changed": route_a != route_b,
+        "report_a_returned_model": route_a,
+        "report_b_returned_model": route_b,
+        "new_failed_probes": sorted(failed_b - failed_a),
+        "resolved_failed_probes": sorted(failed_a - failed_b),
+        "changed_probe_outcomes": changed_probes,
     }
