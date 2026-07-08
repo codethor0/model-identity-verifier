@@ -1,0 +1,316 @@
+"""Command-line interface for Model Identity Verifier."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+from model_identity_verifier import __version__
+from model_identity_verifier.baselines.manager import (
+    baseline_from_report,
+    check_drift,
+    compare_reports,
+    load_baseline,
+    save_baseline,
+)
+from model_identity_verifier.engine.verifier import run_verification
+from model_identity_verifier.models.enums import VerificationStatus
+from model_identity_verifier.models.schemas import VerificationReport
+from model_identity_verifier.probes.registry import get_probe, list_probes, validate_registry
+from model_identity_verifier.providers.base import (
+    MissingApiKeyError,
+    ProviderError,
+    get_provider,
+    list_providers,
+)
+from model_identity_verifier.reports.json_report import save_json_report
+from model_identity_verifier.reports.markdown_report import save_markdown_report
+from model_identity_verifier.reports.sarif_report import save_sarif_report
+from model_identity_verifier.reports.terminal import render_terminal_report
+
+EXIT_SUCCESS = 0
+EXIT_WARN = 1
+EXIT_FAIL = 2
+EXIT_ERROR = 3
+
+STATUS_EXIT_MAP = {
+    VerificationStatus.PASS: EXIT_SUCCESS,
+    VerificationStatus.WARN: EXIT_WARN,
+    VerificationStatus.INCONCLUSIVE: EXIT_WARN,
+    VerificationStatus.DOWNGRADE_SUSPECTED: EXIT_WARN,
+    VerificationStatus.FAIL: EXIT_FAIL,
+    VerificationStatus.HIJACK: EXIT_FAIL,
+    VerificationStatus.ROUTE_MISMATCH: EXIT_FAIL,
+    VerificationStatus.ERROR: EXIT_ERROR,
+}
+
+
+def _exit_code(status: VerificationStatus) -> int:
+    return STATUS_EXIT_MAP.get(status, EXIT_ERROR)
+
+
+def cmd_version(_args: argparse.Namespace) -> int:
+    print(f"model-identity-verifier {__version__}")
+    return EXIT_SUCCESS
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    try:
+        provider_kwargs: dict[str, object] = {"api_key": args.api_key}
+        if args.provider == "mock":
+            provider_kwargs["expected_identity"] = args.expected_identity
+        provider = get_provider(args.provider, **provider_kwargs)
+        if not args.dry_run and args.provider != "mock":
+            provider.require_api_key()
+    except (MissingApiKeyError, ProviderError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+    report = run_verification(
+        provider,
+        args.model,
+        args.expected_identity,
+        mode=args.mode,
+        dry_run=args.dry_run,
+        route_check=args.route_check,
+        downgrade_check=args.downgrade_check,
+    )
+
+    if args.output:
+        output_path = Path(args.output)
+        suffix = output_path.suffix.lower()
+        if suffix == ".json" or args.format == "json":
+            save_json_report(report, output_path)
+        elif suffix in (".md", ".markdown") or args.format == "markdown":
+            save_markdown_report(report, output_path)
+        elif suffix == ".sarif" or args.format == "sarif":
+            save_sarif_report(report, output_path)
+        else:
+            save_json_report(report, output_path)
+
+    if args.format == "json" and not args.output:
+        print(json.dumps(report.model_dump(mode="json"), indent=2))
+    elif args.format == "markdown" and not args.output:
+        from model_identity_verifier.reports.markdown_report import render_markdown_report
+
+        print(render_markdown_report(report))
+    elif args.format == "sarif" and not args.output:
+        from model_identity_verifier.reports.sarif_report import render_sarif_report
+
+        print(render_sarif_report(report))
+    else:
+        render_terminal_report(report)
+
+    return _exit_code(report.verification_status)
+
+
+def cmd_self_test(_args: argparse.Namespace) -> int:
+    errors: list[str] = []
+
+    registry_errors = validate_registry()
+    errors.extend(registry_errors)
+
+    provider = get_provider("mock", expected_identity="claude")
+    report = run_verification(
+        provider,
+        "mock-model",
+        "claude",
+        mode="quick",
+        dry_run=False,
+    )
+    if report.metrics.total_probes == 0:
+        errors.append("No probes executed in self-test")
+
+    dry_report = run_verification(
+        provider,
+        "mock-model",
+        "claude",
+        mode="quick",
+        dry_run=True,
+    )
+    if not dry_report.dry_run:
+        errors.append("Dry run flag not set")
+
+    if errors:
+        print("Self-test FAILED:", file=sys.stderr)
+        for error in errors:
+            print(f"  - {error}", file=sys.stderr)
+        return EXIT_ERROR
+
+    print("Self-test passed")
+    print(f"  Probes in registry: {len(list_probes())}")
+    print(f"  Providers: {len(list_providers())}")
+    print(f"  Mock verification status: {report.verification_status.value}")
+    return EXIT_SUCCESS
+
+
+def cmd_probes_list(_args: argparse.Namespace) -> int:
+    for probe in list_probes():
+        print(f"{probe.id:25} {probe.category.value:14} {probe.language:4} {probe.severity.value}")
+    return EXIT_SUCCESS
+
+
+def cmd_probes_show(args: argparse.Namespace) -> int:
+    probe = get_probe(args.probe_id)
+    if not probe:
+        print(f"Unknown probe: {args.probe_id}", file=sys.stderr)
+        return EXIT_ERROR
+    print(json.dumps(probe.model_dump(mode="json"), indent=2))
+    return EXIT_SUCCESS
+
+
+def cmd_providers_list(_args: argparse.Namespace) -> int:
+    for info in list_providers():
+        print(f"{info['name']:12} env_key={info['env_key']}")
+    return EXIT_SUCCESS
+
+
+def cmd_baseline_create(args: argparse.Namespace) -> int:
+    report_path = Path(args.report)
+    if not report_path.exists():
+        print(f"Report not found: {report_path}", file=sys.stderr)
+        return EXIT_ERROR
+
+    data = json.loads(report_path.read_text(encoding="utf-8"))
+    report = VerificationReport.model_validate(data)
+    baseline = baseline_from_report(report, baseline_id=args.baseline_id or "")
+    if args.output:
+        output = Path(args.output)
+    else:
+        output = Path(".miv/baselines") / f"{baseline.baseline_id}.json"
+    save_baseline(baseline, output)
+    print(f"Baseline saved to {output}")
+    return EXIT_SUCCESS
+
+
+def cmd_baseline_check(args: argparse.Namespace) -> int:
+    baseline_path = Path(args.baseline)
+    report_path = Path(args.report)
+    if not baseline_path.exists():
+        print(f"Baseline not found: {baseline_path}", file=sys.stderr)
+        return EXIT_ERROR
+    if not report_path.exists():
+        print(f"Report not found: {report_path}", file=sys.stderr)
+        return EXIT_ERROR
+
+    baseline = load_baseline(baseline_path)
+    report = VerificationReport.model_validate(json.loads(report_path.read_text(encoding="utf-8")))
+    drift = check_drift(baseline, report)
+    print(f"Drift status: {drift.status.value}")
+    for warning in drift.warnings:
+        print(f"  - {warning}")
+    if drift.status.value in ("SIGNIFICANT", "SEVERE"):
+        return EXIT_WARN
+    return EXIT_SUCCESS
+
+
+def cmd_reports_compare(args: argparse.Namespace) -> int:
+    path_a = Path(args.report_a)
+    path_b = Path(args.report_b)
+    if not path_a.exists() or not path_b.exists():
+        print("One or both report files not found", file=sys.stderr)
+        return EXIT_ERROR
+
+    report_a = VerificationReport.model_validate(json.loads(path_a.read_text(encoding="utf-8")))
+    report_b = VerificationReport.model_validate(json.loads(path_b.read_text(encoding="utf-8")))
+    comparison = compare_reports(report_a, report_b)
+    print(json.dumps(comparison, indent=2))
+    return EXIT_SUCCESS
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="miv",
+        description=(
+            "Model Identity Verifier - detect suspicious model self-identification behavior. "
+            "Model self-identification is generated text. It is not attestation."
+        ),
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    version_parser = subparsers.add_parser("version", help="Show version")
+    version_parser.set_defaults(func=cmd_version)
+
+    verify_parser = subparsers.add_parser("verify", help="Run identity verification")
+    verify_parser.add_argument("--provider", default="mock", help="Provider name")
+    verify_parser.add_argument("--model", default="mock-model", help="Model name")
+    verify_parser.add_argument(
+        "--expected-identity", default="claude", help="Expected model identity"
+    )
+    verify_parser.add_argument("--api-key", default=None, help="API key (prefer env vars)")
+    verify_modes = ["quick", "stress", "deep", "route", "downgrade"]
+    verify_parser.add_argument("--mode", default="quick", choices=verify_modes)
+    verify_parser.add_argument(
+        "--dry-run", action="store_true", help="Plan probes without API calls"
+    )
+    verify_parser.add_argument(
+        "--route-check", action="store_true", help="Include route metadata probes"
+    )
+    verify_parser.add_argument(
+        "--downgrade-check", action="store_true", help="Include downgrade probes"
+    )
+    verify_parser.add_argument(
+        "--format", default="terminal", choices=["terminal", "json", "markdown", "sarif"]
+    )
+    verify_parser.add_argument("--output", "-o", default=None, help="Output file path")
+    verify_parser.set_defaults(func=cmd_verify)
+
+    self_test_parser = subparsers.add_parser("self-test", help="Run internal self-test")
+    self_test_parser.set_defaults(func=cmd_self_test)
+
+    probes_parser = subparsers.add_parser("probes", help="Probe management")
+    probes_sub = probes_parser.add_subparsers(dest="probes_command", required=True)
+
+    probes_list = probes_sub.add_parser("list", help="List all probes")
+    probes_list.set_defaults(func=cmd_probes_list)
+
+    probes_show = probes_sub.add_parser("show", help="Show probe details")
+    probes_show.add_argument("probe_id", help="Probe ID")
+    probes_show.set_defaults(func=cmd_probes_show)
+
+    providers_parser = subparsers.add_parser("providers", help="Provider management")
+    providers_sub = providers_parser.add_subparsers(dest="providers_command", required=True)
+
+    providers_list = providers_sub.add_parser("list", help="List providers")
+    providers_list.set_defaults(func=cmd_providers_list)
+
+    baseline_parser = subparsers.add_parser("baseline", help="Baseline management")
+    baseline_sub = baseline_parser.add_subparsers(dest="baseline_command", required=True)
+
+    baseline_create = baseline_sub.add_parser("create", help="Create baseline from report")
+    baseline_create.add_argument("--report", required=True, help="Source report JSON path")
+    baseline_create.add_argument("--output", default=None, help="Baseline output path")
+    baseline_create.add_argument("--baseline-id", default=None, help="Baseline identifier")
+    baseline_create.set_defaults(func=cmd_baseline_create)
+
+    baseline_check = baseline_sub.add_parser("check", help="Check report against baseline")
+    baseline_check.add_argument("--baseline", required=True, help="Baseline JSON path")
+    baseline_check.add_argument("--report", required=True, help="Report JSON path")
+    baseline_check.set_defaults(func=cmd_baseline_check)
+
+    reports_parser = subparsers.add_parser("reports", help="Report utilities")
+    reports_sub = reports_parser.add_subparsers(dest="reports_command", required=True)
+
+    reports_compare = reports_sub.add_parser("compare", help="Compare two reports")
+    reports_compare.add_argument("report_a", help="First report JSON path")
+    reports_compare.add_argument("report_b", help="Second report JSON path")
+    reports_compare.set_defaults(func=cmd_reports_compare)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    load_dotenv()
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    exit_code = args.func(args)
+    sys.exit(exit_code)
+
+
+if __name__ == "__main__":
+    main()

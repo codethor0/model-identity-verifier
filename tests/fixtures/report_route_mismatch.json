@@ -1,0 +1,47 @@
+{
+  "tool_version": "0.1.0",
+  "session_id": "fix-ROUTE_MISMATCH",
+  "timestamp": "2026-01-01T00:00:00+00:00",
+  "provider": "mock",
+  "requested_model": "mock-model",
+  "expected_identity": "claude",
+  "response_model_metadata": {},
+  "route_metadata": {
+    "requested_provider": null,
+    "requested_model": null,
+    "returned_provider": null,
+    "returned_model": null,
+    "upstream_provider": null,
+    "fallback_model": null,
+    "router_name": null,
+    "metadata_available": false,
+    "metadata_mismatch": true,
+    "mismatch_details": [
+      "model mismatch"
+    ]
+  },
+  "verification_status": "ROUTE_MISMATCH",
+  "confidence_score": 30,
+  "risk_level": "medium",
+  "downgrade_status": "NONE",
+  "metrics": {
+    "total_probes": 1,
+    "passed_probes": 0,
+    "failed_probes": 0,
+    "warned_probes": 0,
+    "skipped_probes": 0,
+    "error_probes": 0,
+    "identity_match_rate": 0.0,
+    "false_identity_rate": 0.0,
+    "hijack_rate": 0.0,
+    "refusal_rate": 0.0,
+    "evasion_rate": 0.0,
+    "average_latency_ms": 0.0,
+    "average_response_length": 0.0
+  },
+  "warnings": [],
+  "errors": [],
+  "probe_results": [],
+  "report_hash": "fixture",
+  "dry_run": false
+}

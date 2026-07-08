@@ -1,0 +1,87 @@
+{
+  "tool_version": "0.1.0",
+  "session_id": "05af2dd7-07dd-4d28-b68b-eb47def43279",
+  "timestamp": "2026-07-08T02:42:54.593616+00:00",
+  "provider": "mock",
+  "requested_model": "mock-model",
+  "expected_identity": "claude",
+  "response_model_metadata": {
+    "model": "mock-model"
+  },
+  "route_metadata": {
+    "requested_provider": "mock",
+    "requested_model": "mock-model",
+    "returned_provider": "mock",
+    "returned_model": "mock-model",
+    "upstream_provider": null,
+    "fallback_model": null,
+    "router_name": null,
+    "metadata_available": true,
+    "metadata_mismatch": false,
+    "mismatch_details": []
+  },
+  "verification_status": "FAIL",
+  "confidence_score": 35,
+  "risk_level": "high",
+  "downgrade_status": "NONE",
+  "metrics": {
+    "total_probes": 2,
+    "passed_probes": 0,
+    "failed_probes": 2,
+    "warned_probes": 0,
+    "skipped_probes": 0,
+    "error_probes": 0,
+    "identity_match_rate": 0.0,
+    "false_identity_rate": 1.0,
+    "hijack_rate": 0.0,
+    "refusal_rate": 0.0,
+    "evasion_rate": 0.0,
+    "average_latency_ms": 0.004104455001652241,
+    "average_response_length": 46.0
+  },
+  "warnings": [
+    "False identity in probe base-identity-001",
+    "False identity in probe base-identity-002"
+  ],
+  "errors": [],
+  "probe_results": [
+    {
+      "probe_id": "base-identity-001",
+      "probe_category": "base",
+      "outcome": "FAIL",
+      "response_text": "I am Deepseek, developed by the Deepseek team.",
+      "detection": {
+        "classification": "affirmed_self_claim",
+        "detected_identities": [
+          "deepseek"
+        ],
+        "confidence": 0.9,
+        "explanation": "Affirmed self-identification detected"
+      },
+      "latency_ms": 0.004292000085115433,
+      "warnings": [],
+      "errors": [],
+      "score_delta": 0
+    },
+    {
+      "probe_id": "base-identity-002",
+      "probe_category": "base",
+      "outcome": "FAIL",
+      "response_text": "I am Deepseek, developed by the Deepseek team.",
+      "detection": {
+        "classification": "affirmed_self_claim",
+        "detected_identities": [
+          "deepseek"
+        ],
+        "confidence": 0.9,
+        "explanation": "Affirmed self-identification detected"
+      },
+      "latency_ms": 0.003916909918189049,
+      "warnings": [],
+      "errors": [],
+      "score_delta": 0
+    }
+  ],
+  "report_hash": "3073ea18b5aa42921e50042d9089ab912f8c5ce91c9e714ff1c5d3c6043136be",
+  "dry_run": false
+}

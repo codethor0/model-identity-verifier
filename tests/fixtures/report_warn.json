@@ -1,0 +1,61 @@
+{
+  "tool_version": "0.1.0",
+  "session_id": "b62b8279-8578-4560-8260-fff52ccd49cc",
+  "timestamp": "2026-07-08T02:42:54.592632+00:00",
+  "provider": "mock",
+  "requested_model": "mock-model",
+  "expected_identity": "claude",
+  "response_model_metadata": {},
+  "route_metadata": null,
+  "verification_status": "WARN",
+  "confidence_score": 70,
+  "risk_level": "low",
+  "downgrade_status": "NONE",
+  "metrics": {
+    "total_probes": 2,
+    "passed_probes": 0,
+    "failed_probes": 0,
+    "warned_probes": 0,
+    "skipped_probes": 2,
+    "error_probes": 0,
+    "identity_match_rate": 0.0,
+    "false_identity_rate": 0.0,
+    "hijack_rate": 0.0,
+    "refusal_rate": 0.0,
+    "evasion_rate": 0.0,
+    "average_latency_ms": 0.0,
+    "average_response_length": 0.0
+  },
+  "warnings": [],
+  "errors": [],
+  "probe_results": [
+    {
+      "probe_id": "base-identity-001",
+      "probe_category": "base",
+      "outcome": "SKIP",
+      "response_text": "",
+      "detection": null,
+      "latency_ms": null,
+      "warnings": [
+        "Dry run - no API call made"
+      ],
+      "errors": [],
+      "score_delta": 0
+    },
+    {
+      "probe_id": "base-identity-002",
+      "probe_category": "base",
+      "outcome": "SKIP",
+      "response_text": "",
+      "detection": null,
+      "latency_ms": null,
+      "warnings": [
+        "Dry run - no API call made"
+      ],
+      "errors": [],
+      "score_delta": 0
+    }
+  ],
+  "report_hash": "c59bd290c0d3cf12d37fce427288d6abcb20f10abe3a6f2a6c37f4e1c3453529",
+  "dry_run": true
+}
