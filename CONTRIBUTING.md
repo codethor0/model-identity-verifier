@@ -38,6 +38,10 @@ Use `miv reports inspect` and `miv reports gate` to review existing smoke JSON l
 - No emojis in code, docs, or output
 - Document only implemented features
 - Use careful language: detected, suspected, observed (not proven, guaranteed)
+- Model self-identification is generated text, not attestation; never present it as proof
+- Use the src layout (`src/model_identity_verifier`), typed Python, and Pydantic models for structured data
+- No placeholder logic; keep docs aligned with implemented CLI behavior
+- Keep the project a focused CLI: no web apps, databases, or dashboards
 
 ## Pull requests
 
